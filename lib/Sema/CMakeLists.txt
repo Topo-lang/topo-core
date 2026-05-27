@@ -8,6 +8,7 @@ add_library(TopoSema
     SmartStructMatcher.cpp
     VisibilityCollector.cpp
 )
+add_library(topo::core::TopoSema ALIAS TopoSema)
 
 target_link_libraries(TopoSema PUBLIC TopoAST TopoParser TopoStdlib)
 

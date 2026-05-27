@@ -1,6 +1,7 @@
 add_library(TopoFormat
     Formatter.cpp
 )
+add_library(topo::core::TopoFormat ALIAS TopoFormat)
 
 target_link_libraries(TopoFormat PUBLIC TopoAST TopoLexer)
 

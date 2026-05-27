@@ -1,6 +1,7 @@
 add_library(TopoLexer
     Lexer.cpp
 )
+add_library(topo::core::TopoLexer ALIAS TopoLexer)
 
 target_link_libraries(TopoLexer PUBLIC TopoBasic)
 

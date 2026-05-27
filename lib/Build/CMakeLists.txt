@@ -1,5 +1,6 @@
 # TopoBuildConfig: INTERFACE library for type-only consumers (BuildTypes.h, HostLanguage.h).
 add_library(TopoBuildConfig INTERFACE)
+add_library(topo::core::TopoBuildConfig ALIAS TopoBuildConfig)
 target_include_directories(TopoBuildConfig INTERFACE
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
@@ -14,6 +15,7 @@ add_library(TopoBuildLib
     ProfileDefaults.cpp
     SymbolTableJson.cpp
 )
+add_library(topo::core::TopoBuildLib ALIAS TopoBuildLib)
 target_include_directories(TopoBuildLib PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>

@@ -1,6 +1,7 @@
 add_library(TopoLSPBridge
     LSPBridge.cpp
 )
+add_library(topo::core::TopoLSPBridge ALIAS TopoLSPBridge)
 
 target_include_directories(TopoLSPBridge PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>

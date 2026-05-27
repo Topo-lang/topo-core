@@ -12,6 +12,7 @@ add_library(TopoCheck
     ContainmentCheck.cpp
     ImportExtractor.cpp
 )
+add_library(topo::core::TopoCheck ALIAS TopoCheck)
 
 # TopoCheck depends on core libraries + Platform for subprocess execution.
 # Zero LLVM dependency.

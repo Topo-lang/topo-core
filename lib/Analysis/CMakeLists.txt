@@ -6,6 +6,7 @@ add_library(TopoAnalysis
     LifetimeAnalysis.cpp
     ImportPathCheck.cpp
 )
+add_library(topo::core::TopoAnalysis ALIAS TopoAnalysis)
 
 # TopoAnalysis depends ONLY on core libraries — zero LLVM dependency.
 # Include path topo-core/include/ is provided transitively via TopoSema.

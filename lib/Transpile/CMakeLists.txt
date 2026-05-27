@@ -5,6 +5,7 @@ add_library(TopoTranspile
     TopoSourceBuilder.cpp
     AdapterResolver.cpp
 )
+add_library(topo::core::TopoTranspile ALIAS TopoTranspile)
 
 target_link_libraries(TopoTranspile PUBLIC TopoAST TopoSema TopoPlatform topo::lang::TopoLang)
 target_link_libraries(TopoTranspile PRIVATE nlohmann_json::nlohmann_json)

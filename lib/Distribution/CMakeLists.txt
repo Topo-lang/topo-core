@@ -11,6 +11,7 @@ add_library(TopoDistribution
     BackendCache.cpp
     BackendCli.cpp
 )
+add_library(topo::core::TopoDistribution ALIAS TopoDistribution)
 target_include_directories(TopoDistribution PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>

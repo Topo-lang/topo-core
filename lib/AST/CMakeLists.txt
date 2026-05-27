@@ -1,6 +1,7 @@
 add_library(TopoAST
     ASTPrinter.cpp
 )
+add_library(topo::core::TopoAST ALIAS TopoAST)
 
 target_link_libraries(TopoAST PUBLIC TopoBasic TopoStdlib)
 

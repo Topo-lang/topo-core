@@ -2,6 +2,7 @@ add_library(TopoTransform
     TokenStreamRewriter.cpp
     SemanticVerifier.cpp
 )
+add_library(topo::core::TopoTransform ALIAS TopoTransform)
 
 target_link_libraries(TopoTransform PUBLIC TopoLexer TopoSema)
 

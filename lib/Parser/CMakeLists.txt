@@ -1,6 +1,7 @@
 add_library(TopoParser
     Parser.cpp
 )
+add_library(topo::core::TopoParser ALIAS TopoParser)
 
 target_link_libraries(TopoParser PUBLIC TopoLexer TopoAST)
 

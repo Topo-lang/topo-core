@@ -34,6 +34,7 @@ add_library(TopoDebug
     # detail schema (principle 19); the loader keeps detail as opaque JSON.
     PassReportsLoader.cpp
 )
+add_library(topo::core::TopoDebug ALIAS TopoDebug)
 target_include_directories(TopoDebug PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>

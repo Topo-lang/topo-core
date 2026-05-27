@@ -53,6 +53,14 @@ endfunction()
 
 # Standalone-mode PCH stub: no-op. Lib CMakeLists keep calling this; build
 # is correct, just slower than the monorepo PCH-reuse path.
-function(topo_apply_std_pch target)
-    # intentionally empty in standalone topo-core
-endfunction()
+#
+# Embedded under the meta-repo: the meta defines a real
+# `topo_apply_std_pch` (wiring TopoPchHost) before add_subdirectory(topo-core),
+# so the guard below keeps that real definition. Standalone topo-core has
+# no command defined yet, the guard falls through, and the no-op stub
+# below is installed instead.
+if(NOT COMMAND topo_apply_std_pch)
+    function(topo_apply_std_pch target)
+        # intentionally empty in standalone topo-core
+    endfunction()
+endif()

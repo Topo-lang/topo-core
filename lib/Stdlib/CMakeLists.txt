@@ -1,6 +1,7 @@
 add_library(TopoStdlib
     Types.cpp
 )
+add_library(topo::core::TopoStdlib ALIAS TopoStdlib)
 
 target_link_libraries(TopoStdlib PUBLIC TopoBasic)
 

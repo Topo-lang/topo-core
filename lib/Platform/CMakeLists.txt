@@ -8,6 +8,7 @@ add_library(TopoPlatform
     Sanitize.cpp
     FileLock.cpp
 )
+add_library(topo::core::TopoPlatform ALIAS TopoPlatform)
 
 target_include_directories(TopoPlatform PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>

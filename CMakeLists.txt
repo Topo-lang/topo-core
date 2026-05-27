@@ -61,18 +61,35 @@ add_subdirectory(lib/Profile)
 # below (out of the lib subdir gate) because downstream packages reference
 # them even when the lib targets are skipped — e.g. topo-lang's
 # CheckRunnerBase.h includes <topo/Build/PassConfig.h>.
-find_package(topo-lang CONFIG QUIET)
-if(topo-lang_FOUND)
-    message(STATUS "topo-lang ${topo-lang_VERSION} found — building "
-        "TopoBuildLib + TopoTranspile")
-    add_subdirectory(lib/Build)
-    add_subdirectory(lib/Transpile)
-    set(TOPO_CORE_WITH_LANG ON)
+#
+# Embedded under the meta-repo: meta sets TOPO_CORE_DEFER_LANG_SUBDIRS=ON
+# before add_subdirectory(topo-core) because topo-lang is added AFTER
+# topo-core in the meta's topological order (consumers come after
+# providers). The lang-subdirs are then added back via
+# `add_subdirectory(topo-core/lib-late ...)` after topo-lang has registered
+# topo::lang::TopoLang.
+option(TOPO_CORE_DEFER_LANG_SUBDIRS
+    "Skip lib/Build + lib/Transpile here; a parent project will add them later via lib-late/"
+    OFF)
+if(NOT TOPO_CORE_DEFER_LANG_SUBDIRS)
+    if(NOT TARGET topo::lang::TopoLang)
+        find_package(topo-lang CONFIG QUIET)
+    endif()
+    if(TARGET topo::lang::TopoLang)
+        message(STATUS "topo-lang found — building TopoBuildLib + TopoTranspile")
+        add_subdirectory(lib/Build)
+        add_subdirectory(lib/Transpile)
+        set(TOPO_CORE_WITH_LANG ON)
+    else()
+        message(STATUS "topo-lang not on CMAKE_PREFIX_PATH — skipping "
+            "TopoBuildLib + TopoTranspile lib targets (still installing their "
+            "public headers). Set -DCMAKE_PREFIX_PATH=<topo-lang-install-prefix> "
+            "to enable them.")
+        set(TOPO_CORE_WITH_LANG OFF)
+    endif()
 else()
-    message(STATUS "topo-lang not on CMAKE_PREFIX_PATH — skipping "
-        "TopoBuildLib + TopoTranspile lib targets (still installing their "
-        "public headers). Set -DCMAKE_PREFIX_PATH=<topo-lang-install-prefix> "
-        "to enable them.")
+    message(STATUS "topo-lang subdirs deferred (TOPO_CORE_DEFER_LANG_SUBDIRS=ON); "
+        "parent project will add topo-core/lib-late after topo-lang is registered")
     set(TOPO_CORE_WITH_LANG OFF)
 endif()
 
@@ -128,7 +145,7 @@ set(TOPO_CORE_TOPO_CLI_SOURCE_DIR "" CACHE PATH
 tools/topo-init/ headers/cpp sources used by select test suites). \
 Leave empty in standalone builds.")
 
-if(TOPO_CORE_BUILD_TESTS AND PROJECT_IS_TOP_LEVEL)
+if(TOPO_CORE_BUILD_TESTS AND (PROJECT_IS_TOP_LEVEL OR TOPO_META_DRIVING_TESTS))
     enable_testing()
     add_subdirectory(test)
 endif()

@@ -1,6 +1,7 @@
 add_library(TopoBasic
     Diagnostic.cpp
 )
+add_library(topo::core::TopoBasic ALIAS TopoBasic)
 
 target_include_directories(TopoBasic PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>

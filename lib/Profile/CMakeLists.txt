@@ -42,6 +42,7 @@ add_library(TopoProfile
     SysMonitoringNdjsonConverter.cpp
     ProfileEngine.cpp
 )
+add_library(topo::core::TopoProfile ALIAS TopoProfile)
 target_include_directories(TopoProfile PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
