@@ -1,0 +1,10 @@
+// typefn declaration
+namespace types {
+  public:
+    typefn PromoteType(typename T) -> typename {
+      match T {
+        int => double;
+        float => double;
+      }
+    }
+}

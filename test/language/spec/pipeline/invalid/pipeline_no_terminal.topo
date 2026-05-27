@@ -1,0 +1,16 @@
+// TEST: pipeline without terminal edge
+// EXPECT-ERROR: no terminal
+
+namespace app {
+  public:
+    void run();
+    fn run {
+      a -> b;
+      b -> c;
+    }
+
+  protected:
+    void a();
+    void b();
+    void c();
+}

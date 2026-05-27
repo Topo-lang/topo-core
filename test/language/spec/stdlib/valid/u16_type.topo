@@ -1,0 +1,8 @@
+// Stdlib bridging type — u16 (width-extension: unsigned 16-bit LE)
+// Tests: unsigned 16-bit integer scalar with arity 0.
+
+namespace ports {
+  public:
+    u16 number();
+    u16 next(u16 from, u16 step);
+}

@@ -1,0 +1,16 @@
+// TEST: basic-external-function
+// Basic external function declaration
+
+namespace app {
+
+public:
+  external void loadConfig();
+  void processData();
+  void transform();
+
+fn processData {
+  stage<1> loadConfig();
+  stage<2> transform();
+}
+
+}

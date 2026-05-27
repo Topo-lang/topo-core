@@ -1,0 +1,6 @@
+// Multi-return with const
+using Int = std::cpp17::int;
+namespace q {
+  public:
+    query(Int id) -> (Int val, Int status) const;
+}

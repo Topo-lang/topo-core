@@ -1,0 +1,16 @@
+// Basic fn block syntax with multiple operations
+
+namespace engine {
+  public:
+    void process();
+    fn process {
+      stage<1> load();
+      stage<1> validate();
+      stage<2> transform();
+    }
+
+  protected:
+    void load();
+    void validate();
+    void transform();
+}

@@ -1,0 +1,10 @@
+// comptime if with false, only else branch
+using Int = std::cpp17::int;
+namespace ct {
+  public:
+    comptime if (false) {
+      void never();
+    } else {
+      void always();
+    }
+}

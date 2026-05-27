@@ -1,0 +1,9 @@
+// TEST: duplicate function declaration
+// EXPECT-ERROR: duplicate function declaration
+// EXPECT-LINE: 8
+
+namespace app {
+  public:
+    void run();
+    void run();
+}

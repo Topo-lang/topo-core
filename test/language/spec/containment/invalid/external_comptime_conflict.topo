@@ -1,0 +1,9 @@
+// TEST: external-comptime-conflict
+// EXPECT-ERROR: 'external' and 'comptime' are mutually exclusive
+
+namespace app {
+
+public:
+  external comptime void forbidden();
+
+}

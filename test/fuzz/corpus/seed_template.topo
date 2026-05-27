@@ -1,0 +1,14 @@
+// Class template
+
+using Int = std::cpp17::int;
+
+namespace container {
+  public:
+    template<typename T>
+    class Stack {
+      public:
+        void push(T value);
+        T pop();
+        Int size() const;
+    }
+}

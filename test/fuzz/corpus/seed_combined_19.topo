@@ -1,0 +1,16 @@
+// Typefn + constraint + template
+using Int = std::cpp17::int;
+namespace types {
+  public:
+    typefn Promote(typename T) -> typename {
+      match T {
+        int => double;
+        float => double;
+      }
+    }
+    constraint Arithmetic {
+      T add(T a, T b);
+    }
+    template<typename T : Arithmetic>
+    void compute(T val);
+}

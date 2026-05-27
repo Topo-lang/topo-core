@@ -1,0 +1,16 @@
+// TEST: duplicate fn block
+// EXPECT-ERROR: duplicate fn block
+
+namespace app {
+  public:
+    void run();
+    fn run {
+      stage<1> init();
+    }
+    fn run {
+      stage<1> init();
+    }
+
+  protected:
+    void init();
+}

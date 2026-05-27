@@ -1,0 +1,13 @@
+// Mixed nesting styles
+namespace a {
+  namespace b::c {
+    public:
+      void f();
+  }
+  namespace d {
+    namespace e::f::g {
+      public:
+        void g();
+    }
+  }
+}

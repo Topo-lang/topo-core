@@ -1,0 +1,6 @@
+// Single public void function
+
+namespace app {
+  public:
+    void run();
+}

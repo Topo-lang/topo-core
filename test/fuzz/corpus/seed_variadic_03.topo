@@ -1,0 +1,6 @@
+using Int = std::cpp17::int;
+namespace gen {
+  public:
+    template<typename T, typename... Rest>
+    T first(T head, Rest... tail);
+}

@@ -1,0 +1,11 @@
+[project]
+name = "error_invalid_toml"
+
+[topo]
+root = "topo/main.topo"
+
+[build]
+sources = ["src/main.cpp"]
+standard = "c++17"
+output = "error_invalid_toml"
+output_type = "banana"

@@ -1,0 +1,10 @@
+using int = std::cpp17::int;
+namespace math {
+  public:
+    class Vec2 {
+      public:
+        int x;
+        int y;
+        fn operator+(Vec2 a, Vec2 b) -> Vec2;
+    }
+}

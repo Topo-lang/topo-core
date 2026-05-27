@@ -1,0 +1,7 @@
+// TEST: array<UnknownType, 4> with an unresolvable element type
+// EXPECT-ERROR: invalid element type of array<T, N>
+
+namespace bad {
+  public:
+    array<UnknownType, 4> badElem();
+}

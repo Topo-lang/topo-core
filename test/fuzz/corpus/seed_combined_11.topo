@@ -1,0 +1,17 @@
+// Stages + parallel same stage
+using Int = std::cpp17::int;
+namespace par {
+  public:
+    void execute();
+    fn execute {
+      stage<1> a();
+      stage<1> b();
+      stage<1> c();
+      stage<2> merge();
+    }
+  protected:
+    void a();
+    void b();
+    void c();
+    void merge();
+}

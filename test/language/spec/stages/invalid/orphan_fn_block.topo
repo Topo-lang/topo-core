@@ -1,0 +1,9 @@
+// TEST: fn block without matching function declaration
+// EXPECT-ERROR: no matching function declaration
+
+namespace app {
+  public:
+    fn nonexistent {
+      stage<1> doSomething();
+    }
+}

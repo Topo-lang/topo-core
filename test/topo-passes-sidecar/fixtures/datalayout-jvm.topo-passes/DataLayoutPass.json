@@ -1,0 +1,21 @@
+{
+  "header": {
+    "pass": "DataLayoutPass",
+    "category": "OPT",
+    "fired": true,
+    "fired_count": 1,
+    "decision": "forced_soa",
+    "reason": "rewrote AoS class to per-field column arrays",
+    "elapsed_ns": 5210000
+  },
+  "field_rename": [
+    {
+      "host_type": "geom.Mesh",
+      "fields": [
+        {"topo_name": "x", "jvm_name": "Mesh$x_arr", "descriptor": "[F"},
+        {"topo_name": "y", "jvm_name": "Mesh$y_arr", "descriptor": "[F"},
+        {"topo_name": "z", "jvm_name": "Mesh$z_arr", "descriptor": "[F"}
+      ]
+    }
+  ]
+}

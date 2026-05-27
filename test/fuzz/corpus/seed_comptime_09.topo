@@ -1,0 +1,7 @@
+// Invalid: comptime if missing parens
+namespace bad {
+  public:
+    comptime if true {
+      void f();
+    }
+}

@@ -1,0 +1,9 @@
+// TEST: bare identifier without proper declaration in visibility section
+// EXPECT-ERROR: expected.*function name|expected.*declaration
+
+namespace app {
+  public:
+    void run();
+
+  someJunk
+}

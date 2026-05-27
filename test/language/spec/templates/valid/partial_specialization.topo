@@ -1,0 +1,24 @@
+// Template partial specialization
+
+using Int = std::cpp17::int32_t;
+using Float = std::cpp17::float;
+
+namespace container {
+  public:
+    template<typename T>
+    class Box {
+      public:
+        Box(T value);
+        T get() const;
+      private:
+        T value;
+    }
+
+    class Box<Int> {
+      public:
+        Box(Int value);
+        Int get() const;
+      private:
+        Int value;
+    }
+}

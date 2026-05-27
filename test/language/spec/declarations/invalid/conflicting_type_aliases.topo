@@ -1,0 +1,12 @@
+// TEST: two `using` aliases bind the same name to conflicting target types.
+//       Distinct from duplicate_function.topo (which targets the function
+//       duplicate path) — this exercises SymbolTable::addTypeAlias() rejection.
+// EXPECT-ERROR: duplicate type alias
+
+using Int = std::cpp17::int32_t;
+using Int = std::cpp17::int64_t;
+
+namespace app {
+  public:
+    Int compute();
+}

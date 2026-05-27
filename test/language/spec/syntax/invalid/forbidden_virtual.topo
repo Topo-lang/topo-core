@@ -1,0 +1,7 @@
+// TEST: virtual keyword should be rejected
+// EXPECT-ERROR: virtual
+
+namespace app {
+  public:
+    virtual void run();
+}

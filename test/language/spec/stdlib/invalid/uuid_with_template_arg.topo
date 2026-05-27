@@ -1,0 +1,10 @@
+// TEST: uuid<i64> — a scalar stdlib type with spurious template args.
+// uuid has arity 0 and never takes `<...>`; Sema's arity check rejects it
+// (`stdlib type 'uuid' takes 0 type parameter(s), got 1`). Either a parse
+// error or the arity error is acceptable — both exit non-zero.
+// EXPECT-ERROR: uuid
+
+namespace bad {
+  public:
+    uuid<i64> bad();
+}

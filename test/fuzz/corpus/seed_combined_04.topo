@@ -1,0 +1,20 @@
+// Constraint + template + instantiate + adapt
+using Int = std::cpp17::int;
+using Bool = std::cpp17::bool;
+namespace ds {
+  public:
+    constraint Eq {
+      Bool equals(T a, T b);
+    }
+    adapt Eq for Int {
+      equals = int_eq;
+    }
+    Bool int_eq(Int a, Int b);
+    template<typename T : Eq>
+    class UniqueSet {
+      public:
+        void add(T val);
+        Bool contains(T val);
+    }
+    instantiate UniqueSet<Int>;
+}

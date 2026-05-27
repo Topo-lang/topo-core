@@ -1,0 +1,13 @@
+using int = std::cpp17::int;
+
+namespace engine {
+  public:
+    void run();
+    fn run {
+      stage<1> create();
+      stage<2> render();
+    }
+
+    lifetime<create..render, int> create(int n);
+    void render();
+}

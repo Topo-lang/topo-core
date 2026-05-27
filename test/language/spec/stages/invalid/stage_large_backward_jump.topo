@@ -1,0 +1,22 @@
+// TEST: stage topology violation — multiple backward jumps in the same fn block.
+//       Distinct from stage_monotonicity.topo (single 2→1 reversal) in that it
+//       verifies the checker reports EVERY monotonicity violation rather than
+//       short-circuiting after the first one. Exercises stage topology integrity
+//       across a multi-operation logic block.
+// EXPECT-ERROR: stage.*less than previous
+// EXPECT-ERRORS: 2
+
+namespace pipeline {
+  public:
+    void process();
+    fn process {
+      stage<5> finalize();
+      stage<3> transform();
+      stage<1> load();
+    }
+
+  protected:
+    void finalize();
+    void transform();
+    void load();
+}

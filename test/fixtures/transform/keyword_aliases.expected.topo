@@ -1,0 +1,19 @@
+// Test: keyword aliases should be transformed to canonical forms
+
+namespace engine {
+  public:
+    type Widget {
+      public:
+        void draw();
+    }
+
+    constraint Renderable {
+      void render();
+    }
+
+    adapt Renderable for Widget {
+      render = Widget_render;
+    }
+
+    void process();
+}

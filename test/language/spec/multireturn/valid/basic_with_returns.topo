@@ -1,0 +1,9 @@
+// Selective-return clause: callee declares which fields are observable.
+// b and c may be elided by the backend (ReturnSpecializationPass ceiling).
+
+using Int = std::cpp17::int32_t;
+
+namespace math {
+  public:
+    compute(Int x) -> (Int a, Int b, Int c) with returns(a, _, _);
+}

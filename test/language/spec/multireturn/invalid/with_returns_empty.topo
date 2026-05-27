@@ -1,0 +1,10 @@
+// TEST: empty with returns() is forbidden — user must either omit the
+// clause or list at least one name/wildcard
+// EXPECT-ERROR: must name at least one
+
+using Int = std::cpp17::int32_t;
+
+namespace math {
+  public:
+    compute(Int x) -> (Int a, Int b) with returns();
+}

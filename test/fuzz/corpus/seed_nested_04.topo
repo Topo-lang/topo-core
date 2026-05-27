@@ -1,0 +1,15 @@
+using Int = std::cpp17::int;
+namespace a {
+  namespace b {
+    public:
+      template<typename T>
+      class Box {
+        public:
+          template<typename U>
+          class Inner {
+            public:
+              void combine(T t, U u);
+          }
+      }
+  }
+}

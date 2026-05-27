@@ -1,0 +1,61 @@
+// Everything together: import, using, namespace, class, template, constraint, adapt, instantiate,
+// pipeline, stages, lifetime, priority, ownership, operator, hints, comptime, multi-return
+import helpers;
+using Int = std::cpp17::int;
+using Bool = std::cpp17::bool;
+using Float = std::cpp17::float;
+std::import("entity.h", Entity);
+
+namespace game::engine {
+  lifetime frame = init..render;
+  public:
+    priority(critical):
+      void init();
+    priority(high):
+      void update();
+    void render();
+
+    fn update {
+      stage<1> physics();
+      stage<1> ai();
+      stage<2> collision();
+    }
+
+    fn render {
+      prepare -> draw;
+      draw -> void;
+    }
+
+    template<typename T>
+    class Pool {
+      public:
+        void add(owned T item);
+        shared T get(Int idx);
+        fn operator==(Pool a, Pool b) -> Bool;
+    }
+
+    constraint Tickable {
+      void tick(T self);
+    }
+    adapt Tickable for Entity {
+      tick = entity_tick;
+    }
+    void entity_tick(Entity e);
+
+    compute(Array data) -> (Float avg, Float max), cardinality(1k..100k), access(streaming);
+
+    comptime if (true) {
+      void debug_overlay();
+    }
+
+    instantiate Pool<Entity>;
+
+  protected:
+    void physics();
+    void ai();
+    void collision();
+    lifetime<frame, Int> prepare(Int n);
+    void draw();
+  private:
+    void internal_gc();
+}

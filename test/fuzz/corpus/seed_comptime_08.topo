@@ -1,0 +1,9 @@
+// comptime in private section
+using Int = std::cpp17::int;
+namespace ct {
+  private:
+    comptime fn helper(int x) -> int { x * 2 }
+
+  public:
+    void run();
+}

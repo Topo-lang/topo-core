@@ -1,0 +1,14 @@
+// internal: visibility section
+
+namespace engine {
+  public:
+    void run();
+    fn run {
+      stage<1> init();
+      stage<2> process();
+    }
+
+  internal:
+    void init();
+    void process();
+}

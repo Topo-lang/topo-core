@@ -1,0 +1,10 @@
+[project]
+name = "config_all_off"
+
+[topo]
+root = "topo/main.topo"
+
+[build]
+sources = ["src/main.cpp"]
+standard = "c++17"
+output = "config_all_off"

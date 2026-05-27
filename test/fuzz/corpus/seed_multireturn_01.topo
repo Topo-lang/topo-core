@@ -1,0 +1,5 @@
+using Int = std::cpp17::int;
+namespace math {
+  public:
+    divmod(Int a, Int b) -> (Int quotient, Int remainder);
+}

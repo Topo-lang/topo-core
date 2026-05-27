@@ -1,0 +1,11 @@
+// TEST: parent constraint not found
+// EXPECT-ERROR: parent constraint.*not found
+
+using Bool = std::cpp17::bool;
+
+namespace math {
+  public:
+    constraint Ordered : NonExistentConstraint {
+      Bool less_than(T a, T b);
+    }
+}

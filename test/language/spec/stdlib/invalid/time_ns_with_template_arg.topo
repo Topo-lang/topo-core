@@ -1,0 +1,10 @@
+// TEST: time_ns<i64> — a scalar stdlib type with spurious template args.
+// time_ns has arity 0 and never takes `<...>`; Sema's arity check rejects
+// it (`stdlib type 'time_ns' takes 0 type parameter(s), got 1`). Either a
+// parse error or the arity error is acceptable — both exit non-zero.
+// EXPECT-ERROR: time_ns
+
+namespace bad {
+  public:
+    time_ns<i64> bad();
+}

@@ -1,0 +1,15 @@
+// Static member declarations
+
+using Int = std::cpp17::int32_t;
+
+namespace factory {
+  public:
+    class Registry {
+      public:
+        static Int count();
+        static void reset();
+        void register_item();
+      private:
+        Int item_count;
+    }
+}

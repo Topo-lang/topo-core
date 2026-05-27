@@ -1,0 +1,7 @@
+// TEST: array<i64, i64> with a type where the integer N is required
+// EXPECT-ERROR: array<T, N>: N must be an integer literal
+
+namespace bad {
+  public:
+    array<i64, i64> badCount();
+}

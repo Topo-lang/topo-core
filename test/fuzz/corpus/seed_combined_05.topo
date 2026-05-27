@@ -1,0 +1,15 @@
+// Lifetime + stages + namespace nesting
+using Int = std::cpp17::int;
+namespace app::core {
+  lifetime session = login..logout;
+  public:
+    void main();
+    fn main {
+      stage<1> login();
+      stage<2> work();
+      stage<3> logout();
+    }
+    lifetime<session, Int> login(Int user);
+    void work();
+    void logout();
+}

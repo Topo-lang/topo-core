@@ -1,0 +1,18 @@
+// Top-level comment
+
+/* Block comment at top level */
+
+using Int = std::cpp17::int; // trailing comment
+
+namespace app /* inline comment */ {
+  // Section comment
+  public:
+    void foo(); // function comment
+
+    /* block comment inside namespace */
+    Int bar(Int x);
+
+  protected:
+    void helper(); // protected comment
+}
+// End of file comment

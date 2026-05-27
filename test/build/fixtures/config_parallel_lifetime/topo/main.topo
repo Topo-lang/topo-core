@@ -1,0 +1,6 @@
+using int = std::cpp17::int;
+
+namespace app {
+    public:
+        int compute(int a, int b);
+}

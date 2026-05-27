@@ -1,0 +1,2 @@
+// Invalid: import with empty string
+std::import("", );

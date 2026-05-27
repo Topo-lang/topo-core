@@ -1,0 +1,36 @@
+// Basic data-aware optimization hints.
+namespace engine::data {
+    public:
+        // Rust-style: hints after return type
+        process() -> void, cardinality(1k..100k), access(streaming);
+
+        // Rust-style: single cardinality value
+        small_batch() -> void, cardinality(64);
+
+        // Rust-style: open-ended range
+        large_scale() -> void, cardinality(10k..);
+
+        // Rust-style: explicit void with hints
+        transform() -> void, cardinality(100k);
+
+        // Rust-style: access pattern only
+        lookup() -> void, access(random);
+
+        // Rust-style: tiled access with size
+        blocked() -> void, access(tiled, 64);
+
+        // C++ style hints
+        void compute() -> cardinality(1k..10k);
+
+        // C++ style with access
+        void scatter() -> access(gather_scatter);
+
+        // C++ style with both
+        void pipeline_op() -> cardinality(10k..1M), access(streaming);
+
+        // Cardinality with M suffix
+        void huge() -> cardinality(1M);
+
+    private:
+        void helper();
+}

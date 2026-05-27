@@ -1,0 +1,22 @@
+// Sema error test fixture
+// Contains intentional semantic errors
+
+namespace engine {
+
+  public:
+    void run();
+    void run();  // duplicate declaration
+
+    fn run {
+      stage<1> init();
+      stage<2> process();
+    }
+
+    fn orphan_block {
+      stage<1> something();
+    }
+
+  protected:
+    void init();
+    void process();
+}

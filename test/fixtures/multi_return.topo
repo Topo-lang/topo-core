@@ -1,0 +1,29 @@
+// Multi-return function test fixture
+
+using int = std::cpp17::int;
+using bool = std::cpp17::bool;
+
+namespace signal {
+    public:
+        // Multi-return function declaration (Rust style)
+        compute(int x, int y) -> (int sum, int product);
+
+        // Regular function that uses single return param
+        void use_sum();
+
+        // fn block with return binding (single)
+        fn use_sum {
+            compute() -> sum;
+        }
+
+    protected:
+        // Another multi-return function
+        analyze(int data) -> (bool valid, int score);
+
+        void process();
+
+        // fn block with destructuring return binding
+        fn process {
+            analyze() -> (ok, s);
+        }
+}

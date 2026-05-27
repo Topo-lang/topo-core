@@ -1,0 +1,11 @@
+// Caller tries to access internal function from same namespace
+
+import lib;
+
+namespace shared {
+  public:
+    void doWork();
+    fn doWork {
+      secret();
+    }
+}

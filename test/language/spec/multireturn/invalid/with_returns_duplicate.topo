@@ -1,0 +1,9 @@
+// TEST: with returns(...) lists the same name twice
+// EXPECT-ERROR: more than once
+
+using Int = std::cpp17::int32_t;
+
+namespace math {
+  public:
+    compute(Int x) -> (Int a, Int b) with returns(a, a);
+}

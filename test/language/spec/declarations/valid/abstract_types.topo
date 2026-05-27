@@ -1,0 +1,10 @@
+// Abstract type names: integer, floating, boolean, text, unsigned
+
+namespace math {
+  public:
+    integer add(integer a, integer b);
+    floating average(floating x, floating y);
+    boolean isPositive(integer n);
+    text format(integer value);
+    unsigned count();
+}

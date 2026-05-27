@@ -1,0 +1,12 @@
+// TEST: external-on-constructor
+// EXPECT-ERROR: expected type member declaration
+
+namespace app {
+
+public:
+  type Client {
+  public:
+    external Client();
+  }
+
+}

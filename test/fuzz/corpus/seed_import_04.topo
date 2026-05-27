@@ -1,0 +1,7 @@
+// Import with using alias
+std::import("vector", std::vector);
+using Vec = std::vector;
+namespace coll {
+  public:
+    void sort(Vec items);
+}

@@ -1,0 +1,22 @@
+// TEST: a `debug T { render ... }` block must be explicitly rejected —
+// the `render` syntax parses, but web-rendering semantics are NOT
+// implemented. Accepting syntax while producing no behavior is a silent
+// partial feature (no-silent-degradation principle), so Sema rejects it.
+// EXPECT-ERROR: render block: rendering not implemented
+
+std::import("cstdint", int32_t);
+
+namespace geom {
+  public:
+    type Mesh {
+      public:
+        int32_t vertexCount;
+    }
+}
+
+debug Mesh {
+  view active_vertices from vertexCount;
+  render method = panel {
+    chart(vertexCount)
+  }
+}

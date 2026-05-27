@@ -1,0 +1,20 @@
+// Class with all features
+using Int = std::cpp17::int;
+using Bool = std::cpp17::bool;
+std::import("handle.h", Handle);
+namespace ui {
+  public:
+    class Window {
+      public:
+        Int width;
+        Int height;
+        owned Handle handle;
+        Window(Int w, Int h);
+        ~Window();
+        void resize(Int w, Int h);
+        Bool isVisible() const;
+        fn operator==(Window a, Window b) -> Bool;
+      private:
+        void updateInternal();
+    }
+}

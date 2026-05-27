@@ -1,0 +1,9 @@
+// Nested namespace path
+
+namespace engine::core::graphics {
+  public:
+    void render();
+
+  protected:
+    void draw();
+}

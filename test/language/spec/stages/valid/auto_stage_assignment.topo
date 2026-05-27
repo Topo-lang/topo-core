@@ -1,0 +1,16 @@
+// Mixed explicit and auto stage assignment
+
+namespace proc {
+  public:
+    void run();
+    fn run {
+      stage<1> a();
+      b();
+      c();
+    }
+
+  protected:
+    void a();
+    void b();
+    void c();
+}

@@ -1,0 +1,30 @@
+{
+  "schema_version": "1",
+  "source": {
+    "host_files": [],
+    "topo_files": [
+      "basic_view_and_summary.topo"
+    ]
+  },
+  "symbols": [
+    {
+      "backend_ext": {},
+      "host_symbol": "geom::Mesh",
+      "inactive_regions": [],
+      "kind": "type",
+      "layout_inverse": {},
+      "render_decls": [],
+      "summary_template": "Mesh: {vertexCount} verts",
+      "topo_name": "Mesh",
+      "views": [
+        {
+          "expr": {
+            "container": "vertexCount",
+            "kind": "field"
+          },
+          "name": "active_vertices"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+// All four visibility levels
+
+namespace engine {
+  public:
+    void start();
+
+  protected:
+    void init();
+
+  private:
+    void cleanup();
+
+  internal:
+    void helper();
+}

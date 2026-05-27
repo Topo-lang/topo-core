@@ -1,0 +1,127 @@
+// core/types.topo — Foundation types and constraint system
+//
+// Showcases: constraint hierarchy, adapt chains, constrained template,
+//            typefn, comptime fn, ownership qualifiers, instantiate.
+// Read top-to-bottom: define constraint → adapt for type → template bound → instantiate.
+
+using int = std::cpp17::int;
+using long = std::cpp17::int64_t;
+using float = std::cpp17::float;
+using double = std::cpp17::double;
+using bool = std::cpp17::bool;
+using size_t = std::cpp17::size_t;
+using uint32_t = std::cpp17::uint32_t;
+using int64_t = std::cpp17::int64_t;
+
+namespace core_types {
+
+  // ── Constraint hierarchy ───────────────────────────────────
+  // Hashable is the root; Identifiable inherits it.
+
+  public:
+    type Handle {
+      public:
+        explicit Handle(int raw_id);
+        bool is_valid() const;
+        int get_id() const;
+      private:
+        int id;
+    }
+
+    constraint Hashable {
+        uint32_t hash();
+        bool equals(const Hashable& other);
+    }
+
+    constraint Serializable {
+        size_t serialized_size();
+        void serialize(int dest);
+        bool deserialize(int src);
+    }
+
+    // Constraint inheritance — Identifiable requires Hashable methods too
+    constraint Identifiable : Hashable {
+        int64_t get_id();
+    }
+
+    // ── Concrete type that will satisfy all three constraints ──
+
+    type EntityId {
+      public:
+        explicit EntityId(int64_t raw);
+        int64_t value() const;
+        bool is_valid() const;
+
+      private:
+        int64_t raw_id;
+    }
+
+    // ── Adapt chain: wire constraint methods to implementations ──
+
+    adapt Hashable for EntityId {
+        hash = entity_id_hash;
+        equals = entity_id_equals;
+    }
+
+    adapt Identifiable for EntityId {
+        get_id = entity_id_get_id;
+    }
+
+    adapt Serializable for EntityId {
+        serialized_size = entity_id_serialized_size;
+        serialize = entity_id_serialize;
+        deserialize = entity_id_deserialize;
+    }
+
+    // ── Constrained template using the bound from above ──────
+
+    template<typename K : Hashable, typename V>
+    type SortedMap {
+      public:
+        void insert(const K& key, const V& value);
+        const V& get(const K& key) const;
+        bool contains(const K& key) const;
+        void remove(const K& key);
+        int size() const;
+
+      private:
+        int count;
+    }
+
+    // ── Type function — selects wider storage type at compile time ──
+
+    typefn StorageType(typename T) -> typename {
+        match T {
+            int => long,
+            float => double,
+            _ => T
+        }
+    }
+
+    // ── Compile-time constant derivation ──────────────────────
+
+    comptime fn max_entities(int world_size) -> int { world_size * 1024 }
+
+    // ── Instantiate the constrained template ──────────────────
+    // EntityId satisfies Hashable via the adapt above.
+
+    instantiate SortedMap<EntityId, Handle>;
+    instantiate SortedMap<EntityId, int>;
+
+    // ── Ownership qualifiers on resource transfer ─────────────
+
+    void register_entity(owned Handle handle, const EntityId& id);
+    void share_entity(shared Handle handle);
+    bool is_entity_alive(weak Handle handle);
+
+  protected:
+    uint32_t entity_id_hash(const EntityId& id);
+    bool entity_id_equals(const EntityId& a, const EntityId& b);
+    int64_t entity_id_get_id(const EntityId& id);
+    size_t entity_id_serialized_size(const EntityId& id);
+    void entity_id_serialize(const EntityId& id, int dest);
+    bool entity_id_deserialize(EntityId& id, int src);
+
+  private:
+    void rehash_entity_table();
+}

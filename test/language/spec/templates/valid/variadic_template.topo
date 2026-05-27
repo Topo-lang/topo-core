@@ -1,0 +1,19 @@
+// Variadic template declaration
+// Tests BNF rule 08.9: variadic_template
+
+using Int = std::cpp17::int;
+
+namespace util {
+  public:
+    template<typename... Ts>
+    void print_all();
+
+    template<typename T, typename... Rest>
+    Int count_args();
+
+    template<typename... Ts>
+    class Tuple {
+      public:
+        Int size() const;
+    }
+}

@@ -1,0 +1,7 @@
+// TEST: slice<UnknownType> with unknown inner type
+// EXPECT-ERROR: invalid type parameter of 'slice'.*unknown type 'UnknownType'
+
+namespace bad {
+  public:
+    slice<UnknownType> samples();
+}

@@ -1,0 +1,4 @@
+// TEST: unterminated string literal
+// EXPECT-ERROR: unterminated string literal
+
+std::import("cstdint);

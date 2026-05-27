@@ -1,0 +1,15 @@
+// Deeply nested template params
+using Int = std::cpp17::int;
+namespace gen {
+  public:
+    template<typename T>
+    class A {
+      public:
+        template<typename U>
+        class B {
+          public:
+            template<typename V>
+            void f(T t, U u, V v);
+        }
+    }
+}

@@ -1,0 +1,10 @@
+[project]
+name = "error_topo_syntax"
+
+[topo]
+root = "topo/main.topo"
+
+[build]
+sources = ["src/main.cpp"]
+standard = "c++17"
+output = "error_topo_syntax"

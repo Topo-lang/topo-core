@@ -1,0 +1,17 @@
+// Multiple adapts for same constraint
+using Int = std::cpp17::int;
+using Float = std::cpp17::float;
+namespace multi {
+  public:
+    constraint Addable {
+      T add(T a, T b);
+    }
+    adapt Addable for Int {
+      add = int_add;
+    }
+    adapt Addable for Float {
+      add = float_add;
+    }
+    Int int_add(Int a, Int b);
+    Float float_add(Float a, Float b);
+}

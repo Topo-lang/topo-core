@@ -1,0 +1,8 @@
+// TEST: unknown constraint on template parameter
+// EXPECT-ERROR: unknown constraint
+
+namespace math {
+  public:
+    template<typename T : FakeConstraint>
+    T normalize(T x, T y);
+}

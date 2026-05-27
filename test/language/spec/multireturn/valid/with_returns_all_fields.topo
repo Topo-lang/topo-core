@@ -1,0 +1,10 @@
+// Selective-return clause listing every field — equivalent to omitting
+// the clause, but legal for explicitness (no fields are elidable).
+
+using Int = std::cpp17::int32_t;
+
+namespace math {
+  public:
+    divmod(Int a, Int b) -> (Int quotient, Int remainder)
+        with returns(quotient, remainder);
+}

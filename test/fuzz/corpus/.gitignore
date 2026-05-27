@@ -1,0 +1,15 @@
+# libFuzzer runtime artifacts (sha-named files) — auto-generated.
+# Only seed_*.json/topo in this tree should be versioned.
+#
+# Ignore every top-level entry, then allow-list the .gitignore itself,
+# named seeds, and the two structured subdirs (whose own non-seed
+# contents are ignored just below).
+/*
+!.gitignore
+!seed_*
+!symbol-table/
+!backend-request/
+symbol-table/*
+!symbol-table/seed_*
+backend-request/*
+!backend-request/seed_*

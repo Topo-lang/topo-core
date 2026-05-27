@@ -1,0 +1,10 @@
+// Ownership qualifiers with template functions
+
+namespace container {
+  public:
+    template<typename T>
+    void process(owned T item);
+
+    template<typename T>
+    void share(shared T item);
+}

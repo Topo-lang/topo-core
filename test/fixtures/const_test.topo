@@ -1,0 +1,13 @@
+// Test fixture for Issue 004 — const propagation to LLVM IR
+
+using int = std::cpp17::int;
+
+namespace math {
+
+  public:
+    int compute(const int& x, const int& y);
+    void update(int& data);
+
+  protected:
+    int getValue() const;
+}

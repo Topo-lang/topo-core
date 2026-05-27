@@ -1,0 +1,13 @@
+namespace sys {
+  public:
+    priority(critical):
+      void emergency_stop();
+    priority(high):
+      void process_input();
+    priority(normal):
+      void update();
+    priority(low):
+      void log();
+    priority(background):
+      void telemetry();
+}

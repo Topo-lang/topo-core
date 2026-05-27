@@ -1,0 +1,10 @@
+// Using alias for standard types
+
+using Int = std::cpp17::int;
+using Bool = std::cpp17::bool;
+
+namespace app {
+  public:
+    Int compute(Int x);
+    Bool isReady();
+}

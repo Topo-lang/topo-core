@@ -1,0 +1,15 @@
+// Deeply nested with lifetime
+using Int = std::cpp17::int;
+namespace app {
+  namespace sys {
+    lifetime frame = init..render;
+    public:
+      void run();
+      fn run {
+        stage<1> init();
+        stage<2> render();
+      }
+      lifetime<frame, Int> init(Int n);
+      void render();
+  }
+}

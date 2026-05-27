@@ -1,0 +1,13 @@
+using int = std::cpp17::int;
+
+namespace engine {
+  lifetime temp = compute;
+
+  public:
+    void run();
+    fn run {
+      stage<1> compute();
+    }
+
+    lifetime<temp, int> compute(int x);
+}

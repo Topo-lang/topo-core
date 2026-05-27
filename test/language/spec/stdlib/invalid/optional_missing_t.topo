@@ -1,0 +1,7 @@
+// TEST: optional<> with no type parameter
+// EXPECT-ERROR: stdlib type 'optional' takes 1 type parameter
+
+namespace bad {
+  public:
+    optional<> badReturn();
+}

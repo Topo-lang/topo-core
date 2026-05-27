@@ -1,0 +1,8 @@
+// Stdlib bridging type — slice<T> (Plan 38 Batch 1)
+// Tests: generic stdlib type with arity 1; non-owning view.
+
+namespace data {
+  public:
+    f64 mean(slice<f64> samples);
+    i64 firstNonZero(slice<i64> values);
+}

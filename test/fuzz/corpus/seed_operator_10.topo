@@ -1,0 +1,13 @@
+// Multiple operators on same class with binding
+using int = std::cpp17::int;
+using bool = std::cpp17::bool;
+namespace geo {
+  public:
+    class Color {
+      public:
+        int r; int g; int b;
+        fn operator+(Color a, Color b) -> Color = color_add;
+        fn operator*(Color a, int s) -> Color = color_scale;
+        fn operator==(Color a, Color b) -> bool = color_eq;
+    }
+}

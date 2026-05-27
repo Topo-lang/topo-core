@@ -1,0 +1,5 @@
+// TEST: column precision for unterminated string
+// EXPECT-ERROR: unterminated string
+// EXPECT-LINE: 5
+// EXPECT-COL: 25
+using Cfg = std::import("config.h);

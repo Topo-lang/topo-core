@@ -1,0 +1,20 @@
+// Cross-namespace pipeline: fn block references functions in a child namespace
+
+using int = std::cpp17::int;
+
+namespace app {
+
+  public:
+    void run();
+
+    fn run {
+      stages::init -> stages::exec;
+      stages::exec -> void;
+    }
+
+  namespace stages {
+    protected:
+      void init();
+      void exec();
+  }
+}

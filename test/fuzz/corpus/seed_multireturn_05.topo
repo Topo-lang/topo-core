@@ -1,0 +1,6 @@
+// Multi-return with void (invalid combo)
+using Int = std::cpp17::int;
+namespace bad {
+  public:
+    f(Int x) -> (void a, Int b);
+}

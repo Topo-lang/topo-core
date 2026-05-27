@@ -1,0 +1,9 @@
+using Int = std::cpp17::int;
+namespace gen {
+  public:
+    template<typename... Ts>
+    class Tuple {
+      public:
+        Int size() const;
+    }
+}

@@ -1,0 +1,15 @@
+using Int = std::cpp17::int;
+namespace deep {
+  public:
+    class Tree {
+      public:
+        class Node {
+          public:
+            Int value;
+            class Children {
+              public:
+                Int count;
+            }
+        }
+    }
+}

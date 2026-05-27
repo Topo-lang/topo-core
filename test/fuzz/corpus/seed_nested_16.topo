@@ -1,0 +1,7 @@
+// 8 levels of namespace nesting
+namespace l1 { namespace l2 { namespace l3 { namespace l4 {
+  namespace l5 { namespace l6 { namespace l7 { namespace l8 {
+    public:
+      void bottom();
+  }}}}
+}}}}

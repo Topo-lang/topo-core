@@ -1,0 +1,5 @@
+// EXPECT-ERROR: unknown access pattern
+namespace engine::data {
+    public:
+        process(Array items) -> void, access(sequential);
+}

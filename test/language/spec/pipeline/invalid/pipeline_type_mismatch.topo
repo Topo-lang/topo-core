@@ -1,0 +1,15 @@
+// TEST: pipeline references undeclared node function
+// EXPECT-ERROR: undeclared
+
+namespace app {
+  public:
+    void run();
+    fn run {
+      load -> transform;
+      transform -> void;
+    }
+
+  protected:
+    void load();
+    // transform is NOT declared
+}

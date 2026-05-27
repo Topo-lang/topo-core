@@ -1,0 +1,9 @@
+// Regression seed: line comments inside a multi-line parameter list.
+// The formatter must keep format -> re-parse -> format a fixed point
+// when a `//` comment sits between parameters of a long signature.
+namespace n {
+  public:
+    void wide(int aaaaa, int bbbbb, int ccccc, int ddddd, int eeeee, //x
+              int fffff, int ggggg, int hhhhh, int iiiii, int jjjjj, int kkkkk);
+}
+//tail

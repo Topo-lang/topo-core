@@ -1,0 +1,13 @@
+namespace app {
+  public:
+    void run();
+
+    fn run {
+      stage<1> init();
+      stage<2> process();
+    }
+
+  protected:
+    void init();
+    void process();
+}

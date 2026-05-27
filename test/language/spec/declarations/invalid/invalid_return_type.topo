@@ -1,0 +1,7 @@
+// TEST: malformed trailing return type
+// EXPECT-ERROR: expected
+
+namespace app {
+  public:
+    run() -> -> int;
+}

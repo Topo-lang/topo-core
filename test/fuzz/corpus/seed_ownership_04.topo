@@ -1,0 +1,6 @@
+// Owned return
+std::import("buffer.h", Buffer);
+namespace io {
+  public:
+    owned Buffer allocate();
+}

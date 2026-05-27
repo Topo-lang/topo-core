@@ -1,0 +1,13 @@
+// TEST: internal visibility override behavior
+// EXPECT-ERROR: duplicate function declaration
+
+namespace lib {
+  public:
+    void api_call();
+
+  internal:
+    void helper();
+
+  public:
+    void helper();
+}

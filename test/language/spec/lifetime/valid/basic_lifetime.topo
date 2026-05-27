@@ -1,0 +1,20 @@
+using int = std::cpp17::int;
+
+namespace engine {
+  lifetime frame = create..render;
+  lifetime temp = compute;
+
+  public:
+    void run();
+    fn run {
+      stage<1> create();
+      stage<1> load();
+      stage<2> compute();
+      stage<3> render();
+    }
+
+    lifetime<frame, int> create(int n);
+    lifetime<frame, int> load(int id);
+    void compute();
+    void render();
+}

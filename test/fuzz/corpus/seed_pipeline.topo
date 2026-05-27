@@ -1,0 +1,14 @@
+// Linear pipeline: a -> b -> void
+
+namespace proc {
+  public:
+    void run();
+    fn run {
+      a -> b;
+      b -> void;
+    }
+
+  protected:
+    void a();
+    void b();
+}

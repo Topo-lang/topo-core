@@ -1,0 +1,15 @@
+// TEST: multiple-external-functions
+
+namespace io {
+
+public:
+  external void readFile();
+  external void writeFile();
+  void process();
+
+fn process {
+  stage<1> readFile();
+  stage<2> writeFile();
+}
+
+}

@@ -1,0 +1,9 @@
+// Edge case: all positions are wildcards — declares that no field is
+// observable.  Legal; equivalent to "every field may be elided."
+
+using Int = std::cpp17::int32_t;
+
+namespace stats {
+  public:
+    probe(Int x) -> (Int a, Int b, Int c) with returns(_, _, _);
+}

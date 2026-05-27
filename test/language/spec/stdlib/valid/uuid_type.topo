@@ -1,0 +1,10 @@
+// Stdlib bridging type — uuid: 16-byte RFC 4122 value (raw byte order),
+// {16,8} layout. Scalar shape: no `<...>`. Native UUID in Java/Python,
+// 16-byte buffer in C++/Rust/TS. Exercised in parameter and return
+// position, including nested inside a record variant.
+
+namespace ids {
+  public:
+    uuid mint();
+    record<id: uuid, seq: i64> tag(uuid prev);
+}

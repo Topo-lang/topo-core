@@ -1,0 +1,9 @@
+// Stdlib bridging type — time_ns: i64-isomorphic scalar (8B signed LE),
+// semantic = nanoseconds since the Unix epoch. Scalar shape: no `<...>`.
+// Exercised in both parameter and return position.
+
+namespace clock {
+  public:
+    time_ns now();
+    bool isFuture(time_ns t);
+}

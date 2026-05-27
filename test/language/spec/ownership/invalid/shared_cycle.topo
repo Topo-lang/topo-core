@@ -1,0 +1,17 @@
+// S-OWN-004: shared cycle detection (A -> shared B, B -> shared A)
+// EXPECT-ERROR: shared ownership cycle.*S-OWN-004
+
+namespace graph {
+  public:
+    class NodeA {
+      public:
+        shared NodeB child;
+    }
+
+    class NodeB {
+      public:
+        shared NodeA parent;
+    }
+
+    void run(shared NodeA a);
+}

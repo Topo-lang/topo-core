@@ -1,0 +1,11 @@
+// Variadic + constraint
+using Int = std::cpp17::int;
+using Bool = std::cpp17::bool;
+namespace fn {
+  public:
+    constraint Serializable {
+      Int serialize(T val);
+    }
+    template<typename... Args>
+    void send(Args... args);
+}

@@ -1,0 +1,10 @@
+// Ownership in class members
+std::import("texture.h", Texture);
+namespace gfx {
+  public:
+    class Sprite {
+      public:
+        owned Texture tex;
+        void setTexture(owned Texture t);
+    }
+}

@@ -1,0 +1,8 @@
+// TEST: unterminated block comment
+// EXPECT-ERROR: unterminated block comment
+
+/* this comment never ends
+namespace app {
+  public:
+    void run();
+}

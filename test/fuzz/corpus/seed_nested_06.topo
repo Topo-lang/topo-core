@@ -1,0 +1,12 @@
+namespace a::b {
+  public:
+    void x();
+  namespace c::d {
+    public:
+      void y();
+    namespace e {
+      public:
+        void z();
+    }
+  }
+}

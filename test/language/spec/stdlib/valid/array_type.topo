@@ -1,0 +1,11 @@
+// Stdlib bridging type — array<T, N> fixed-length inline buffer.
+// Tests: type + compile-time integer N; nested composite/array element
+// recursion; caller-computes layout (N * stride(T) at align(T)).
+
+namespace buffers {
+  public:
+    array<i64, 4> quad();
+    f64 dot(array<f64, 3> a, array<f64, 3> b);
+    array<record<a: i64, b: f64>, 2> pairs();
+    array<array<i64, 4>, 2> grid();
+}

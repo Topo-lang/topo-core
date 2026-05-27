@@ -1,0 +1,5 @@
+// Only using declarations, no namespace
+using Int = std::cpp17::int;
+using Float = std::cpp17::float;
+using Bool = std::cpp17::bool;
+using Double = std::cpp17::double;

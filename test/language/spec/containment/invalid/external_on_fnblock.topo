@@ -1,0 +1,14 @@
+// TEST: external-on-fnblock
+// EXPECT-ERROR: 'external' cannot be applied to fn blocks
+
+namespace app {
+
+public:
+  void process();
+  void init();
+
+  external fn process {
+    stage<1> init();
+  }
+
+}

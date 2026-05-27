@@ -1,0 +1,77 @@
+@PACKAGE_INIT@
+
+# topo-core CMake package config (Plan 39 Phase 1).
+# Supports component-aware find_package(topo-core COMPONENTS frontend check ...).
+# Recognized components: frontend, check, fmt, transpile, build, lsp, fixtures
+#   - frontend  : Platform, Basic, Lexer, AST, Parser, Sema
+#   - check     : Analysis, Check, CheckRunner   (transitively requires frontend)
+#   - fmt       : Format, Transform              (transitively requires frontend)
+#   - transpile : Transpile                      (transitively requires frontend)
+#   - build     : BuildConfig, BuildLib          (transitively requires frontend)
+#   - lsp       : LSPBridge                       (transitively requires frontend)
+#   - fixtures  : .topo source + build/e2e test fixtures, exposed via
+#                 TOPO_CORE_FIXTURES_DIR and TOPO_CORE_BUILD_FIXTURES_DIR
+
+# Resolve fixture install dirs so downstream test CMakeLists can reference
+# them by one variable regardless of in-tree vs find_package'd consumption.
+set(TOPO_CORE_FIXTURES_DIR "${PACKAGE_PREFIX_DIR}/share/topo-core/fixtures")
+set(TOPO_CORE_BUILD_FIXTURES_DIR "${PACKAGE_PREFIX_DIR}/share/topo-core/build-fixtures")
+#
+# Phase 1 scope: TopoCoreTargets.cmake exports the targets whose PUBLIC
+# dependency closure stays inside topo-core (frontend + check + fmt). Targets
+# with cross-package PUBLIC deps (Build/Transpile/CheckRunner pulling
+# TopoLang) ship as artifacts but are not in the export set; Phase 2+ wires
+# them in once topo-lang exposes a clean export surface.
+
+# TopoPlatform is a STATIC library whose Process.cpp.o carries unresolved
+# reproc::process::* symbols (PRIVATE link to reproc++). third_party/reproc
+# installs reproc / reproc++ CMake configs under <prefix>/share/{reproc,
+# reproc++} alongside this Config.cmake, so a single PATHS hint picks both
+# up from the same install prefix as topo-core itself. See issue
+# split-topo-core-static-lib-transitive-reproc-leak for the analysis.
+include(CMakeFindDependencyMacro)
+find_dependency(reproc++ CONFIG PATHS "${PACKAGE_PREFIX_DIR}/share/reproc++" NO_DEFAULT_PATH)
+find_dependency(reproc   CONFIG PATHS "${PACKAGE_PREFIX_DIR}/share/reproc"   NO_DEFAULT_PATH)
+
+# TopoProfile + TopoDebug + TopoBuildLib + TopoTranspile PUBLIC-link
+# nlohmann_json::nlohmann_json. TopoCoreTargets.cmake references the
+# imported target by name, so it has to be known before TopoCoreTargets
+# loads.
+find_dependency(nlohmann_json CONFIG)
+
+# TopoBuildLib and TopoTranspile PUBLIC-depend on topo::lang::TopoLang.
+# Whether this topo-core install includes those libs is decided at
+# topo-core configure time (gate flips when topo-lang is on the prefix
+# path); if the gate was ON, TopoCoreTargets.cmake references
+# topo::lang::TopoLang and we must find_dependency(topo-lang) before
+# loading it. The substitution below comes from the configure side:
+# CMakeLists.txt sets TOPO_CORE_WITH_LANG=ON when topo-lang_FOUND.
+set(TOPO_CORE_WITH_LANG @TOPO_CORE_WITH_LANG@)
+# Mark "topo-core is currently loading" so topo-langConfig — which
+# would normally find_dependency(topo-core) — can short-circuit. The
+# target-existence check alone is not enough: at this point in the
+# load we have not yet included TopoCoreTargets.cmake, so none of the
+# topo::core::* targets exist.
+set(_topo_core_loading TRUE)
+if(TOPO_CORE_WITH_LANG AND NOT _topo_lang_loading)
+    find_dependency(topo-lang CONFIG)
+endif()
+unset(_topo_core_loading)
+
+include("${CMAKE_CURRENT_LIST_DIR}/TopoCoreTargets.cmake")
+
+set(_topo_core_known_components frontend check fmt transpile build lsp fixtures)
+
+foreach(_topo_core_comp ${topo-core_FIND_COMPONENTS})
+    list(FIND _topo_core_known_components "${_topo_core_comp}" _idx)
+    if(_idx EQUAL -1)
+        set(topo-core_FOUND FALSE)
+        set(topo-core_NOT_FOUND_MESSAGE
+            "Unknown topo-core component: '${_topo_core_comp}'. "
+            "Known components: ${_topo_core_known_components}")
+        return()
+    endif()
+    set(topo-core_${_topo_core_comp}_FOUND TRUE)
+endforeach()
+
+check_required_components(topo-core)

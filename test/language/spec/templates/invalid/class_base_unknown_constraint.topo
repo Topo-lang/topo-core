@@ -1,0 +1,17 @@
+// TEST: class template constraint unsatisfied — template parameter bound by a
+//       constraint that does not exist in the symbol table. Exercises the
+//       CLASS template constraint validation path (T001), distinct from
+//       unknown_constraint.topo which targets FUNCTION templates.
+// EXPECT-ERROR: unknown constraint.*T001
+
+using Int = std::cpp17::int32_t;
+
+namespace container {
+  public:
+    template<typename T : MissingConstraint>
+    class Box {
+      public:
+        void put(T value);
+        Int size() const;
+    }
+}

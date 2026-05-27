@@ -1,0 +1,13 @@
+# Baseline: without aggressive mode / obfuscation.
+[project]
+name = "shared_lib"
+
+[topo]
+root = "topo/main.topo"
+
+[build]
+sources = ["src/hashlib.cpp"]
+include = ["include"]
+standard = "c++17"
+output = "hashlib_baseline"
+output_type = "shared"

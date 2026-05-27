@@ -1,0 +1,19 @@
+// Diamond-shaped DAG pipeline
+
+namespace proc {
+  public:
+    void run();
+    fn run {
+      a -> b;
+      a -> c;
+      b -> d;
+      c -> d;
+      d -> void;
+    }
+
+  protected:
+    void a();
+    void b();
+    void c();
+    void d();
+}

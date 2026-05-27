@@ -1,0 +1,14 @@
+// All visibility levels + imports + using
+import logger;
+using Int = std::cpp17::int;
+std::import("string", std::string);
+namespace svc {
+  public:
+    void start();
+  protected:
+    void configure();
+  private:
+    void secret();
+  internal:
+    void debug_only();
+}

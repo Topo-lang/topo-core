@@ -1,0 +1,8 @@
+// Const + shared combination
+
+std::import("particle.h", Particle);
+
+namespace physics {
+  public:
+    void inspect(const shared Particle p);
+}

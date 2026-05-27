@@ -1,0 +1,7 @@
+namespace io {
+  public:
+    adapt integer for CustomInt {
+      from = custom_from;
+      to = custom_to;
+    }
+}

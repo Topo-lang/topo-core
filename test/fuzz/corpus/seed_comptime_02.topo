@@ -1,0 +1,9 @@
+using Int = std::cpp17::int;
+namespace ct {
+  public:
+    comptime if (true) {
+      void enabled_func();
+    } else {
+      void disabled_func();
+    }
+}

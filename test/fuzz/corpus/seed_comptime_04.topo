@@ -1,0 +1,10 @@
+// Nested comptime if
+using Int = std::cpp17::int;
+namespace ct {
+  public:
+    comptime if (true) {
+      comptime if (true) {
+        void deeply_enabled();
+      }
+    }
+}

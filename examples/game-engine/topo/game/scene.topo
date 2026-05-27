@@ -1,0 +1,77 @@
+// game/scene.topo — Scene graph with parallel stages
+//
+// Showcases: same-directory sibling import, nested namespace with
+// private helpers, parallel stage branches, cross-namespace
+// references in fn blocks, and priority declarations.
+
+using int = std::cpp17::int;
+using bool = std::cpp17::bool;
+
+import entity;
+
+namespace scene {
+
+  // ── Scene types ─────────────────────────────────────────────
+
+  public:
+    type SceneNode {
+      public:
+        explicit SceneNode(const entity::Entity& owner);
+        void add_child(const SceneNode& child);
+        int child_count() const;
+
+      private:
+        int parent_index;
+        int first_child;
+        int next_sibling;
+    }
+
+    type SceneGraph {
+      public:
+        void insert(const SceneNode& node);
+        void remove(int node_id);
+        int root() const;
+        int node_count() const;
+
+      private:
+        int root_id;
+        int count;
+    }
+
+  // ── Nested namespace: graph traversal internals ─────────────
+  // Private helpers that the staged update calls into.
+
+  namespace graph {
+    private:
+      void traverse_depth_first(int root_id);
+      void traverse_breadth_first(int root_id);
+      int collect_visible(int root_id);
+
+    internal:
+      void debug_print_tree(int root_id);
+  }
+
+  // ── Staged scene update ─────────────────────────────────────
+  // Stage 2 has two parallel operations: graph traversal and
+  // animation update run concurrently on independent data.
+
+  public:
+    priority(high):
+    void update();
+
+    fn update {
+      stage<1> entity::archetype::sort() -> sorted;
+      stage<2> graph::collect_visible(sorted) -> visible;
+      stage<2> update_animations() -> animated;
+      stage<3> merge_results(visible, animated) -> merged;
+      stage<4> build_draw_list(merged);
+    }
+
+  protected:
+    void update_animations();
+    void merge_results(int visible_set, int animated_set);
+    void build_draw_list(int merged);
+
+  private:
+    void sort_draw_calls();
+}

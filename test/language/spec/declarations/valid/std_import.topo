@@ -1,0 +1,10 @@
+// std::import for C++ header types
+
+std::import("cstdint", uint64_t);
+std::import("cstddef", size_t);
+
+namespace store {
+  public:
+    uint64_t getKey();
+    void setSize(size_t n);
+}

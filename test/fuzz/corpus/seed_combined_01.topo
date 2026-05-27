@@ -1,0 +1,15 @@
+// Pipeline + ownership
+std::import("frame.h", Frame);
+namespace gfx {
+  public:
+    void render();
+    fn render {
+      load -> draw;
+      draw -> present;
+      present -> void;
+    }
+  protected:
+    owned Frame load();
+    void draw(shared Frame f);
+    void present(shared Frame f);
+}

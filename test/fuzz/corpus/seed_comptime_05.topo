@@ -1,0 +1,7 @@
+// comptime fn with multiple params
+using Int = std::cpp17::int;
+namespace ct {
+  public:
+    comptime fn add(int a, int b) -> int { a + b }
+    comptime fn max(int a, int b) -> int { a > b ? a : b }
+}

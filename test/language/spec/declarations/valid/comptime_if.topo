@@ -1,0 +1,17 @@
+// Compile-time conditional declaration
+// Tests BNF rule 08.10: comptime_if
+
+using Int = std::cpp17::int;
+
+namespace config {
+  public:
+    comptime if (N <= 4) {
+      void small_impl();
+    } else {
+      void large_impl();
+    }
+
+    comptime if (HAS_SIMD) {
+      void simd_process(Int data);
+    }
+}

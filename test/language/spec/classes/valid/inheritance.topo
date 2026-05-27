@@ -1,0 +1,16 @@
+// Class inheritance
+
+using Int = std::cpp17::int32_t;
+
+namespace shapes {
+  public:
+    class Shape {
+      public:
+        Int area() const;
+    }
+
+    class Circle : public Shape {
+      public:
+        Int radius() const;
+    }
+}

@@ -1,0 +1,9 @@
+// Main references 'transform' which is NOT declared anywhere
+
+namespace worker {
+  public:
+    void run();
+    fn run {
+      stage<1> transform();
+    }
+}

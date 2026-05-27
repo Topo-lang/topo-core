@@ -1,0 +1,46 @@
+// main.topo — Game engine root orchestration
+//
+// Showcases: cross-directory imports resolving relative to this
+// file's location, selective import pulling specific symbols,
+// 5-stage parallel game loop, and multi-return declaration.
+
+using int = std::cpp17::int;
+
+import core/types;
+import core/math;
+import core/memory;
+import engine/renderer;
+import engine/physics;
+import engine/resources;
+import game/entity;
+import game/scene;
+import game/systems;
+
+// Selective import: pull only specific symbols from a module.
+import core/types { EntityId, Serializable };
+
+namespace game_engine {
+
+  // ── 5-stage parallel game loop ──────────────────────────────
+  // Stages 2 and 4 each contain two parallel operations that
+  // execute concurrently on independent data.
+
+  public:
+    void run();
+
+    fn run {
+      stage<1> systems::poll() -> input_state;
+      stage<2> engine::physics::step(input_state) -> phys_result;
+      stage<2> systems::tick_ai() -> ai_result;
+      stage<3> scene::update() -> frame;
+      stage<4> engine::renderer::draw(frame);
+      stage<4> engine::resources::mix(frame);
+      stage<5> engine::renderer::present();
+    }
+
+    get_version() -> (int major, int minor, int patch);
+
+  protected:
+    void initialize();
+    void shutdown();
+}

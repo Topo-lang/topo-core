@@ -1,0 +1,12 @@
+// Ellipsis token in variadic template parameters
+
+using Int = std::cpp17::int32_t;
+
+namespace util {
+  public:
+    template<typename... Args>
+    void invoke();
+
+    template<typename T, typename... Rest>
+    Int count();
+}

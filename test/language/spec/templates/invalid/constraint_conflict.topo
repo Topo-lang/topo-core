@@ -1,0 +1,11 @@
+// TEST: constraint references non-existent parent
+// EXPECT-ERROR: parent constraint.*not found
+
+using Bool = std::cpp17::bool;
+
+namespace math {
+  public:
+    constraint Sortable : MissingParent {
+      Bool compare(T a, T b);
+    }
+}

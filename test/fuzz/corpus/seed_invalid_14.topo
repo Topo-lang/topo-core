@@ -1,0 +1,7 @@
+namespace n {
+  public:
+    fn run {
+      stage<1> a();
+      stage<-1> b();
+    }
+}

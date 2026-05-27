@@ -1,0 +1,14 @@
+// TEST: pipeline references undeclared function
+// EXPECT-ERROR: undeclared
+
+namespace app {
+  public:
+    void run();
+    fn run {
+      a -> ghost;
+      ghost -> void;
+    }
+
+  protected:
+    void a();
+}

@@ -1,0 +1,7 @@
+// TEST: bare int without using alias
+// EXPECT-ERROR: unknown.*type|invalid.*type
+
+namespace app {
+  public:
+    int compute();
+}

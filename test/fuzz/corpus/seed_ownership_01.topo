@@ -1,0 +1,5 @@
+std::import("widget.h", Widget);
+namespace ui {
+  public:
+    void create(owned Widget w);
+}

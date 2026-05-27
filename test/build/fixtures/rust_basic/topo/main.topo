@@ -1,0 +1,14 @@
+// Rust basic example — visibility declarations for Rust code
+//
+// Demonstrates std::rust types and namespace mapping to Rust modules.
+
+using i32 = std::rust::i32;
+
+namespace math {
+  public:
+    i32 add(i32 a, i32 b);
+    i32 multiply(i32 a, i32 b);
+
+  protected:
+    i32 helper(i32 x);
+}

@@ -1,0 +1,14 @@
+// Multi-return + pipeline
+using Int = std::cpp17::int;
+using Float = std::cpp17::float;
+namespace calc {
+  public:
+    void run();
+    fn run {
+      compute -> report;
+      report -> void;
+    }
+  protected:
+    compute(Int n) -> (Float mean, Float stddev);
+    void report();
+}

@@ -1,0 +1,4 @@
+namespace a { namespace b { namespace c { namespace d { namespace e { namespace f { namespace g {
+  public:
+    void seven_deep();
+}}}}}}}

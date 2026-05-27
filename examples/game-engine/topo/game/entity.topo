@@ -1,0 +1,106 @@
+// game/entity.topo — ECS with constraint hierarchy and template specialization
+//
+// Showcases: constraint inheritance, constrained templates,
+// full template specialization, adapt blocks, nested namespace.
+
+using int = std::cpp17::int;
+using float = std::cpp17::float;
+using bool = std::cpp17::bool;
+
+namespace entity {
+
+  // Constraint hierarchy: base + two derived constraints.
+  public:
+    constraint Component {
+        void attach(int entity_id);
+        void detach();
+    }
+
+    constraint Tickable : Component {
+        void tick(float dt);
+    }
+
+    constraint Renderable : Component {
+        void render();
+    }
+
+    type Entity {
+      public:
+        explicit Entity(int id);
+        int id() const;
+        bool is_alive() const;
+    }
+
+    type Vector3 {
+      public:
+        float x() const;
+        float y() const;
+        float z() const;
+    }
+
+    type TransformComponent {
+      public:
+        Vector3 position() const;
+        void set_position(const Vector3& pos);
+      private:
+        Vector3 pos;
+        float rot_w;
+        float rot_x;
+        float rot_y;
+        float rot_z;
+    }
+
+    type MeshComponent {
+      public:
+        int mesh_id() const;
+        bool is_visible() const;
+    }
+
+  // Constrained template: C must satisfy Component.
+  public:
+    template<typename C : Component>
+    type ComponentStore {
+      public:
+        void add(int entity_id, const C& component);
+        void remove(int entity_id);
+        bool has(int entity_id) const;
+    }
+
+    // Full specialization overrides the generic store.
+    template<>
+    type ComponentStore<TransformComponent> {
+      public:
+        void set(int entity_id, const TransformComponent& t);
+        TransformComponent get(int entity_id) const;
+    }
+
+    instantiate ComponentStore<MeshComponent>;
+
+    adapt Component for TransformComponent {
+        attach = transform_attach;
+        detach = transform_detach;
+    }
+
+    adapt Tickable for TransformComponent {
+        tick = transform_tick;
+    }
+
+    adapt Renderable for MeshComponent {
+        render = mesh_render;
+    }
+
+  // Nested namespace for archetype-related helpers.
+  namespace archetype {
+    public:
+      void sort();
+      int lookup(int entity_id);
+    private:
+      void rebuild_table();
+  }
+
+  protected:
+    void transform_attach(int entity_id);
+    void transform_detach();
+    void transform_tick(float dt);
+    void mesh_render();
+}

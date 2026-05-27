@@ -1,0 +1,8 @@
+// Already uses canonical syntax — no changes expected
+
+namespace engine {
+  public:
+    void render();
+  protected:
+    void prepare();
+}

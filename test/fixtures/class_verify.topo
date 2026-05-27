@@ -1,0 +1,15 @@
+// Test fixture for class member verification
+
+using int = std::cpp17::int;
+
+namespace app {
+
+  public:
+    class Foo {
+        public:
+            void bar();
+            int baz(int x);
+        protected:
+            void helper();
+    }
+}

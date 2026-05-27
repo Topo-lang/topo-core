@@ -1,0 +1,7 @@
+// Ownership in template
+std::import("node.h", Node);
+namespace gen {
+  public:
+    template<typename T>
+    void process(owned T item);
+}

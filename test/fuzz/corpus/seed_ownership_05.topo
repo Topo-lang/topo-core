@@ -1,0 +1,6 @@
+// Invalid: owned on primitive
+using Int = std::cpp17::int;
+namespace bad {
+  public:
+    void f(owned Int x);
+}

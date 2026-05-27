@@ -1,0 +1,7 @@
+// Empty variadic
+namespace gen {
+  public:
+    template<typename... Ts>
+    void empty();
+    instantiate empty<>;
+}

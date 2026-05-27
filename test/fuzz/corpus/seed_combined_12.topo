@@ -1,0 +1,8 @@
+// Hints + multi-return + const
+using Int = std::cpp17::int;
+using Float = std::cpp17::float;
+namespace stat {
+  public:
+    analyze(Array data) -> (Float min, Float max, Float avg), cardinality(1k..1M), access(streaming);
+    void report() const;
+}

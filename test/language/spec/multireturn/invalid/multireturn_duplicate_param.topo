@@ -1,0 +1,10 @@
+// TEST: duplicate return parameter name in multi-return
+// EXPECT-ERROR: duplicate return parameter
+
+using int = std::cpp17::int;
+using bool = std::cpp17::bool;
+
+namespace app {
+  public:
+    compute() -> (int val, bool val);
+}

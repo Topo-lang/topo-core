@@ -1,0 +1,16 @@
+// TEST: template class used without type arguments
+// EXPECT-ERROR: template argument count mismatch
+
+using Int = std::cpp17::int32_t;
+
+namespace container {
+  public:
+    template<typename T, typename U>
+    class Pair {
+      public:
+        T first();
+        U second();
+    }
+
+    void process(Pair<Int> data);
+}

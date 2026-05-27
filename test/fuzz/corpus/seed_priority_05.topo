@@ -1,0 +1,13 @@
+// Priority with pipeline
+namespace svc {
+  public:
+    priority(critical):
+      void boot();
+      fn boot {
+        stage<1> hw();
+        stage<2> sw();
+      }
+  protected:
+    void hw();
+    void sw();
+}

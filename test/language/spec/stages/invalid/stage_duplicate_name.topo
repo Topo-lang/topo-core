@@ -1,0 +1,15 @@
+// TEST: fn block references function not declared in namespace
+// EXPECT-ERROR: undeclared function
+
+namespace app {
+  public:
+    void run();
+    fn run {
+      stage<1> compute();
+      stage<2> finalize();
+    }
+
+  protected:
+    void compute();
+    // finalize is NOT declared
+}

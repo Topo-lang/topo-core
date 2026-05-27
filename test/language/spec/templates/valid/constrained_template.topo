@@ -1,0 +1,12 @@
+// Constrained template parameter
+
+namespace math {
+  public:
+    constraint Numeric {
+      T add(T a, T b);
+      T zero();
+    }
+
+    template<typename T : Numeric>
+    T sum(T a, T b);
+}

@@ -1,0 +1,21 @@
+// Pipeline test fixture
+
+using int = std::cpp17::int;
+using bool = std::cpp17::bool;
+
+namespace pipeline {
+    public:
+        void run();
+
+        // Pipeline fn block: DAG edges
+        fn run {
+            fetch -> decode;
+            decode -> execute;
+            execute -> void;
+        }
+
+    protected:
+        fetch() -> (int opcode, int operand);
+        decode(int opcode, int operand) -> (bool valid, int result);
+        execute(bool valid, int result) -> (int output, bool success);
+}

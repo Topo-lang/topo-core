@@ -1,0 +1,15 @@
+# Build artifacts
+**/build/
+**/.topo-cache/
+
+# Compiled binaries
+*/incremental_test
+*/rust_basic
+*/rust_runtime
+*/shared_lib
+*/hashlib_driver
+*/config_validation
+*/config_all_off
+*/config_all_on
+*/config_parallel_adaptive
+*/config_parallel_lifetime

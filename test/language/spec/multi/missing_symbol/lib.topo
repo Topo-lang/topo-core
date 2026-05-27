@@ -1,0 +1,6 @@
+// Library declaring only 'compute'
+
+namespace shared {
+  public:
+    void compute();
+}

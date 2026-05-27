@@ -1,0 +1,9 @@
+// TEST: union variant whose type is a bare (undeclared) user type.
+// The cross-language byte contract is only defined over stdlib types,
+// so a non-stdlib variant type is rejected.
+// EXPECT-ERROR: invalid type of union field 'payload'
+
+namespace bad {
+  public:
+    bool take(union<tag: u8, payload: SomeUserStruct> u);
+}

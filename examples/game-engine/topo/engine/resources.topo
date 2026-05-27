@@ -1,0 +1,101 @@
+// engine/resources.topo — Ownership trifecta + variadic template + lifetime
+//
+// Showcases: owned/shared/weak ownership on function params, variadic
+// template for batch preloading, resource lifetime scope, and audio
+// mixing pipeline folded into the resource subsystem
+
+using int = std::cpp17::int;
+using bool = std::cpp17::bool;
+using float = std::cpp17::float;
+
+import renderer;
+
+namespace engine::resources {
+
+  lifetime asset_scope = load_level..unload_level;
+
+  // ── Template with ownership — handle wrapping any resource ────────
+
+  public:
+    type AudioClip {
+      public:
+        int duration_ms() const;
+        bool is_loaded() const;
+        int channel_count() const;
+      private:
+        int clip_id;
+    }
+
+    type AudioSource {
+      public:
+        explicit AudioSource(int source_id);
+        void set_position(float x, float y, float z);
+        bool is_playing() const;
+        void set_volume(float vol);
+      private:
+        int source_id;
+        float volume;
+    }
+
+    template<typename T>
+    type ResourceHandle {
+      public:
+        shared T get();
+        owned T take();
+        bool valid(weak T ref);
+
+      private:
+        int slot;
+        int generation;
+    }
+
+    type TextureHandle {}
+    type MeshHandle {}
+    instantiate ResourceHandle<TextureHandle>;
+    instantiate ResourceHandle<MeshHandle>;
+    instantiate ResourceHandle<AudioClip>;
+
+  // ── Variadic template — batch preload heterogeneous resources ─────
+  public:
+    template<typename... Ts>
+    void preload_assets(Ts... resources);
+
+  // ── Resource management with ownership annotations ────────────────
+  public:
+    int load_level(int level_id);
+    void unload_level();
+    int acquire(owned TextureHandle tex);
+    void release(owned MeshHandle mesh);
+
+  // ── Audio playback with ownership + 4-stage mixing pipeline ────────
+
+  public:
+    int load_clip(owned AudioClip clip);
+    int play(shared AudioSource src, float x, float y, float z);
+    void destroy(owned AudioClip clip);
+    void mix(int frame);
+
+    fn mix {
+      stage<1> update_listener();
+      stage<2> update_sources();
+      stage<3> spatialize();
+      stage<4> submit_to_device();
+    }
+
+  protected:
+    void update_listener();
+    void update_sources();
+    void spatialize();
+    void submit_to_device();
+
+  // ── Background streaming ──────────────────────────────────────────
+
+  public:
+    priority(background):
+    void stream_next_chunk(int clip_id);
+    void prefetch_textures(int region_id);
+    void evict_unused();
+
+  private:
+    void decode_chunk(int clip_id, int offset);
+}

@@ -1,0 +1,8 @@
+// Stdlib bridging type — bool (Plan 38 Batch 1)
+// Tests: stdlib scalar with arity 0; usable as return and parameter type.
+
+namespace app {
+  public:
+    bool isReady();
+    bool isPositive(bool flag);
+}

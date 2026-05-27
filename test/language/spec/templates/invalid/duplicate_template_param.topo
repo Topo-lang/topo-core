@@ -1,0 +1,8 @@
+// TEST: duplicate template parameter name
+// EXPECT-ERROR: duplicate template parameter
+
+namespace math {
+  public:
+    template<typename T, typename T>
+    void bad(T x);
+}

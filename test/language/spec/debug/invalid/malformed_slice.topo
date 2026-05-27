@@ -1,0 +1,17 @@
+// TEST: slice expressions must be `field` or `field[INT..INT]`. A negative
+// start is rejected (the parser only accepts non-negative integer literals).
+// EXPECT-ERROR: slice start must be a non-negative integer
+
+std::import("cstdint", int32_t);
+
+namespace svc {
+  public:
+    type Box {
+      public:
+        int32_t cells;
+    }
+}
+
+debug Box {
+  view broken from cells[-1..10];
+}

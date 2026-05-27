@@ -1,0 +1,8 @@
+// Combined fixture: all 6 stdlib Batch-1 types in one declaration
+// (covers parser dispatch + sema validation paths together).
+
+namespace boundary {
+  public:
+    bool valid(i64 id, f64 score, string label,
+               optional<i64> parent, slice<f64> samples);
+}

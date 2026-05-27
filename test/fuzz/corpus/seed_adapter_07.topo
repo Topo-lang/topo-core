@@ -1,0 +1,6 @@
+// Invalid: constraint with no members
+namespace bad {
+  public:
+    constraint Empty {
+    }
+}

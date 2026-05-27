@@ -1,0 +1,11 @@
+namespace n {
+  public:
+    void run();
+    fn run {
+      a -> b;
+      b -> a;
+    }
+  protected:
+    void a();
+    void b();
+}

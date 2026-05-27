@@ -1,0 +1,6 @@
+// TEST: unclosed namespace brace
+// EXPECT-ERROR: expected
+
+namespace app {
+  public:
+    void run();

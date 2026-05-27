@@ -1,0 +1,5 @@
+// EXPECT-ERROR: requires a positive tile size
+namespace engine::data {
+    public:
+        process(Array items) -> void, access(tiled);
+}

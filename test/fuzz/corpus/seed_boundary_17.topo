@@ -1,0 +1,6 @@
+namespace ns {
+  public:
+    void f() const;
+    void g() const;
+    void h() const;
+}

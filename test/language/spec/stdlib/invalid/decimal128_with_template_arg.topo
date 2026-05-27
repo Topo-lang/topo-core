@@ -1,0 +1,10 @@
+// TEST: decimal128<i64> — a scalar stdlib type with spurious template
+// args. decimal128 has arity 0 and never takes `<...>`; Sema's arity
+// check rejects it (`stdlib type 'decimal128' takes 0 type parameter(s),
+// got 1`). Either a parse error or the arity error is acceptable.
+// EXPECT-ERROR: decimal128
+
+namespace bad {
+  public:
+    decimal128<i64> bad();
+}

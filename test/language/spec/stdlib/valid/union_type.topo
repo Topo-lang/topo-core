@@ -1,0 +1,16 @@
+// Stdlib bridging type — union<...> tagged union (named fields).
+// First field is the discriminant tag (an integer scalar); the rest are
+// variants that share one storage region sized for the largest variant.
+// Tests: union in parameter and return position; a nested stdlib generic
+// variant; a nested record variant; and an explicit padding field (the
+// locked design uses natural alignment plus user-inserted padding, NO
+// `align` keyword). Byte layout is computed by the host emitters from the
+// same single-source composeUnionLayout() rule.
+
+namespace events {
+  public:
+    union<kind: u8, count: i64, ratio: f64> decode(string raw);
+    bool route(union<tag: u8, pad: u8, items: slice<i64>,
+                      note: optional<string>,
+                      order: record<id: i64, amount: f64>> ev);
+}

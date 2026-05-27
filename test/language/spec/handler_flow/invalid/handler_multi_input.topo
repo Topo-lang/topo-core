@@ -1,0 +1,8 @@
+// TEST: a handler may take at most one input (the Functor's In);
+// multiple inputs must be aggregated into one record<...>.
+// EXPECT-ERROR: a handler takes a single input value
+
+namespace bad {
+  public:
+    handler combine(i64 a, f64 b) -> bool;
+}

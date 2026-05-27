@@ -1,0 +1,15 @@
+// Import + using + class + operator
+import math_helpers;
+using Int = std::cpp17::int;
+using Bool = std::cpp17::bool;
+std::import("vec.h", Vec3);
+
+namespace geo {
+  public:
+    class AABB {
+      public:
+        Vec3 min;
+        Vec3 max;
+        fn operator==(AABB a, AABB b) -> Bool;
+    }
+}

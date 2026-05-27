@@ -1,0 +1,5 @@
+using Float = std::cpp17::float;
+namespace trig {
+  public:
+    sincos(Float angle) -> (Float s, Float c);
+}

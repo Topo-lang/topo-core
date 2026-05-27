@@ -1,0 +1,8 @@
+namespace n {
+  public:
+    void f();
+  public:
+    void g();
+  public:
+    void h();
+}

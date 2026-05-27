@@ -1,0 +1,19 @@
+// Adapter + template + instantiate + pipeline
+using Int = std::cpp17::int;
+namespace proc {
+  public:
+    constraint Processable {
+      void step(T item);
+    }
+    adapt Processable for Int {
+      step = int_step;
+    }
+    void int_step(Int item);
+    template<typename T : Processable>
+    void batch(T item);
+    instantiate batch<Int>;
+    void run();
+    fn run {
+      batch -> void;
+    }
+}

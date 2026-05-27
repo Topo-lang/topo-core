@@ -1,0 +1,9 @@
+// TEST: with returns(...) lists more items than the function declares
+// EXPECT-ERROR: lists 4 items but function declares only 2
+
+using Int = std::cpp17::int32_t;
+
+namespace math {
+  public:
+    compute(Int x) -> (Int a, Int b) with returns(a, _, _, _);
+}

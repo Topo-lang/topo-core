@@ -1,0 +1,15 @@
+// TEST: a wide record<...> produced by one handler must NOT silently flow
+// into a handler whose In is a narrower record<...>. The declaration model
+// is exact-match — "签名即契约" — there is no record-width subtyping.
+// EXPECT-ERROR: does not match producer return type
+
+namespace orders {
+  public:
+    handler parse(string raw) -> record<id: i64, amount: f64>;
+    handler validate(record<id: i64> o) -> bool;
+
+    flow pipeline {
+      parse -> validate;
+      validate -> void;
+    }
+}

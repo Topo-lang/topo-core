@@ -1,0 +1,10 @@
+// Stdlib bridging type — record<...> with an explicit padding field.
+// The locked design uses natural alignment plus user-inserted padding
+// fields (NO `align` keyword). Here `pad` is an ordinary u8 field the
+// author adds to control the byte footprint; the toolchain treats it
+// like any other field.
+
+namespace wire {
+  public:
+    bool encode(record<tag: u8, pad: u8, code: u32, ts: i64> frame);
+}

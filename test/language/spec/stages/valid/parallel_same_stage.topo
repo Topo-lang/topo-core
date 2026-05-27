@@ -1,0 +1,16 @@
+// Multiple operations at same stage (parallel)
+
+namespace proc {
+  public:
+    void run();
+    fn run {
+      stage<1> opA();
+      stage<1> opB();
+      stage<2> merge();
+    }
+
+  protected:
+    void opA();
+    void opB();
+    void merge();
+}

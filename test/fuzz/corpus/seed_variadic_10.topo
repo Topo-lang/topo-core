@@ -1,0 +1,11 @@
+// Nested template with variadic
+using Int = std::cpp17::int;
+namespace gen {
+  public:
+    template<typename T>
+    class Outer {
+      public:
+        template<typename... Args>
+        void apply(Args... args);
+    }
+}

@@ -1,0 +1,23 @@
+{
+  "header": {
+    "pass": "ReturnSpecializationPass",
+    "category": "OPT",
+    "fired": true,
+    "fired_count": 1,
+    "decision": "applied",
+    "reason": "eliminated 2 unused return-struct fields",
+    "elapsed_ns": 1450000
+  },
+  "entries": [
+    {
+      "host_function": "compute()V",
+      "eliminated_fields": [0, 2],
+      "kept_fields": [1, 3]
+    },
+    {
+      "host_function": "render()V",
+      "eliminated_fields": [],
+      "kept_fields": [0, 1, 2]
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+// All-features test fixture
+
+import utils;
+
+using IntPtr = std::cpp17::intptr_t;
+using SizeT = std::cpp17::size_t;
+using bool = std::cpp17::bool;
+
+namespace engine::core::graphics {
+
+  public:
+    void render(const IntPtr handle);
+    isReady() -> bool;
+
+    fn render {
+      stage<1> loadShaders();
+      stage<1> prepareBuffers();
+      stage<2> drawFrame();
+    }
+
+  protected:
+    void loadShaders();
+    prepareBuffers() -> void;
+    void drawFrame() const;
+
+  private:
+    void cleanup();
+
+    namespace detail {
+      private:
+        void internalHelper();
+    }
+}

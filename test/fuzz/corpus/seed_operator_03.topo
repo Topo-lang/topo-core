@@ -1,0 +1,9 @@
+using int = std::cpp17::int;
+namespace math {
+  public:
+    class Matrix {
+      public:
+        fn operator*(Matrix a, Matrix b) -> Matrix = glm::mat_mul;
+        fn operator+(Matrix a, Matrix b) -> Matrix = glm::mat_add;
+    }
+}

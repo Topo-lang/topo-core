@@ -1,0 +1,9 @@
+// Operator without return type
+using int = std::cpp17::int;
+namespace bad {
+  public:
+    class Z {
+      public:
+        fn operator+(Z a, Z b);
+    }
+}

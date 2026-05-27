@@ -1,0 +1,8 @@
+// TEST: record with two fields sharing the same name.
+// Duplicate field names make the byte layout ambiguous.
+// EXPECT-ERROR: duplicate field name 'id' in record
+
+namespace bad {
+  public:
+    bool take(record<id: i64, id: f64> r);
+}

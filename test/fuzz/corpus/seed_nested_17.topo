@@ -1,0 +1,15 @@
+// Nested namespaces with constraints
+using Int = std::cpp17::int;
+namespace lib {
+  namespace types {
+    public:
+      constraint Orderable {
+        Int compare(T a, T b);
+      }
+  }
+  namespace algo {
+    public:
+      template<typename T : lib::types::Orderable>
+      void sort(T arr);
+  }
+}

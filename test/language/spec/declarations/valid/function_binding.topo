@@ -1,0 +1,8 @@
+// Function binding: fn sort(arr: Array) -> void = std::sort;
+using int = std::cpp17::int;
+
+namespace math {
+    public:
+        int abs(int x) = std::abs;
+        sort(int* arr, int n) -> void = std::sort;
+}

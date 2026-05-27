@@ -1,0 +1,37 @@
+// 06_shared_lib — Shared library output + aggressive mode + obfuscation
+// Demonstrates: deep namespaces, heavy private/protected, obfuscation, shared lib
+
+using int = std::cpp17::int;
+
+namespace crypto::hash::impl::detail::core::internal {
+
+  private:
+    void rotate_left(int* val, int bits);
+    void mix_round(int* state, const int input);
+    void pad_block(int* block, int len);
+    void compress(int* state, const int* block);
+}
+
+namespace crypto::hash::impl::detail {
+
+  private:
+    void init_state(int* state);
+    void process_block(int* state, const int* data, int len);
+}
+
+namespace crypto::hash::impl {
+
+  protected:
+    void update(int* ctx, const int* data, int len);
+    finalize(int* ctx) -> int;
+}
+
+namespace crypto::hash {
+
+  public:
+    int hash_data(const int* data, int len);
+    int hash_combine(int h1, int h2);
+
+  protected:
+    void hash_init(int* ctx);
+}

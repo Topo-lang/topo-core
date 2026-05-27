@@ -1,0 +1,17 @@
+{
+  "header": {
+    "category": "COVERED",
+    "decision": "forced_applied",
+    "elapsed_ns": 0,
+    "fired": true,
+    "fired_count": 1,
+    "pass": "VisibilityPass",
+    "reason": "rewrote private/internal declarations to _typo-prefixed names; runtime visibility enforced via emitted guards"
+  },
+  "rewrites": [
+    {
+      "host_file": "src/app.ts",
+      "transformed": true
+    }
+  ]
+}

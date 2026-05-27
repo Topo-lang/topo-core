@@ -1,0 +1,19 @@
+// Test: keyword aliases should be transformed to canonical forms
+
+module engine {
+  pub:
+    struct Widget {
+      pub:
+        void draw();
+    }
+
+    trait Renderable {
+      void render();
+    }
+
+    impl Renderable for Widget {
+      render = Widget_render;
+    }
+
+    void process();
+}

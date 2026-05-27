@@ -1,0 +1,10 @@
+// Stdlib bridging type — record<...> composite (named fields).
+// Tests: multi-field record in parameter and return position, with a
+// nested stdlib generic field; natural-alignment layout is computed by
+// the host emitters from the same single-source rule.
+
+namespace orders {
+  public:
+    record<id: i64, amount: f64> build(string symbol);
+    bool accept(record<key: string, items: slice<i64>, note: optional<string>> order);
+}

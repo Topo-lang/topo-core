@@ -1,0 +1,11 @@
+using int = std::cpp17::int;
+using bool = std::cpp17::bool;
+namespace math {
+  public:
+    class Point {
+      public:
+        fn operator==(Point a, Point b) -> bool;
+        fn operator!=(Point a, Point b) -> bool;
+        fn operator<(Point a, Point b) -> bool;
+    }
+}

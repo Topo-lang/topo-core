@@ -1,0 +1,19 @@
+// Explicit template instantiation declaration
+// Tests BNF rule 08.5: instantiate_decl
+
+using Int = std::cpp17::int32_t;
+using Float = std::cpp17::float;
+
+namespace container {
+  public:
+    template<typename T>
+    class Stack {
+      public:
+        void push(T value);
+        T pop();
+        Int size() const;
+    }
+
+    instantiate Stack<Int>;
+    instantiate Stack<Float>;
+}

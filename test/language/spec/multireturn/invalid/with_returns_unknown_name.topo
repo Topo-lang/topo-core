@@ -1,0 +1,9 @@
+// TEST: with returns(...) references an undeclared return-param name
+// EXPECT-ERROR: unknown return parameter
+
+using Int = std::cpp17::int32_t;
+
+namespace math {
+  public:
+    compute(Int x) -> (Int a, Int b) with returns(a, c);
+}

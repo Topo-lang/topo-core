@@ -1,0 +1,9 @@
+// typefn with unknown match arm
+namespace types {
+  public:
+    typefn Narrow(typename T) -> typename {
+      match T {
+        double => float;
+      }
+    }
+}

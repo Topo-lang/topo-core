@@ -1,0 +1,18 @@
+[project]
+name = "config_parallel_adaptive"
+
+[topo]
+root = "topo/main.topo"
+
+[build]
+sources = ["src/main.cpp"]
+standard = "c++17"
+output = "config_parallel_adaptive"
+embed_ir = true
+
+[parallel]
+mode = "auto"
+instrument = true
+
+[adaptive]
+mode = "auto"

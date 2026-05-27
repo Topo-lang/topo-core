@@ -1,0 +1,7 @@
+// Invalid: adapt missing for keyword
+namespace bad {
+  public:
+    adapt Numeric Int {
+      add = int_add;
+    }
+}

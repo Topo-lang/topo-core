@@ -1,0 +1,12 @@
+// Nested + priority + comptime
+using Int = std::cpp17::int;
+namespace app {
+  namespace core {
+    public:
+      priority(critical):
+        void init();
+      comptime if (true) {
+        void optional_feature();
+      }
+  }
+}

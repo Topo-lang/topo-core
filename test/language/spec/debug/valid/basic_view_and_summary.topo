@@ -1,0 +1,17 @@
+// Plan 40 Phase 0 — basic debug block with one view and a summary.
+// Validates: target type resolution, bare slice expression, summary string.
+
+std::import("cstdint", int32_t);
+
+namespace geom {
+  public:
+    type Mesh {
+      public:
+        int32_t vertexCount;
+    }
+}
+
+debug Mesh {
+  view active_vertices from vertexCount;
+  summary "Mesh: {vertexCount} verts";
+}

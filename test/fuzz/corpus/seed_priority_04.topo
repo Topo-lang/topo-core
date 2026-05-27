@@ -1,0 +1,7 @@
+// Empty priority section
+namespace n {
+  public:
+    priority(critical):
+    priority(low):
+      void f();
+}

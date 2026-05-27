@@ -1,0 +1,4 @@
+namespace namespace n {
+  public:
+    void f();
+}

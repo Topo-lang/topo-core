@@ -1,0 +1,12 @@
+// internal namespace forces all members to Internal visibility
+
+internal namespace detail {
+  public:
+    void helper();
+    void worker();
+}
+
+namespace api {
+  public:
+    void serve();
+}

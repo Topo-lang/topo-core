@@ -1,0 +1,5 @@
+std::import("resource.h", Resource);
+namespace sys {
+  public:
+    void use(shared Resource r);
+}

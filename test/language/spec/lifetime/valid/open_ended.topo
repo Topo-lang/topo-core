@@ -1,0 +1,17 @@
+using int = std::cpp17::int;
+
+namespace engine {
+  lifetime session = init..;
+
+  public:
+    void run();
+    fn run {
+      stage<1> init();
+      stage<2> process();
+      stage<3> cleanup();
+    }
+
+    lifetime<session, int> init(int x);
+    void process();
+    void cleanup();
+}

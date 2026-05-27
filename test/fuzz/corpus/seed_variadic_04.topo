@@ -1,0 +1,8 @@
+using Int = std::cpp17::int;
+namespace gen {
+  public:
+    template<typename... Args>
+    void invoke(Args... args);
+    instantiate invoke<Int>;
+    instantiate invoke<Int, Int>;
+}

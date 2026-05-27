@@ -1,0 +1,8 @@
+// Stdlib bridging type — i16 (width-extension: signed 16-bit LE)
+// Tests: signed 16-bit integer scalar with arity 0.
+
+namespace audio {
+  public:
+    i16 sample();
+    i16 mix(i16 left, i16 right);
+}

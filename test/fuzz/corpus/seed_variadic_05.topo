@@ -1,0 +1,10 @@
+// Variadic with constraint
+using Int = std::cpp17::int;
+namespace gen {
+  public:
+    constraint Printable {
+      void print(T val);
+    }
+    template<typename... Ts>
+    void print_all(Ts... vals);
+}

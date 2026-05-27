@@ -1,0 +1,10 @@
+using int = std::cpp17::int;
+
+namespace mathlib {
+    public:
+        int add(int a, int b);
+        int multiply(int a, int b);
+
+    private:
+        int internal_helper(int x);
+}

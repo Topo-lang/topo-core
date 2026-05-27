@@ -1,0 +1,6 @@
+std::import("cstdint", uint64_t);
+std::import("string", std::string);
+namespace io {
+  public:
+    void write(uint64_t size);
+}

@@ -1,0 +1,9 @@
+using int = std::cpp17::int;
+namespace math {
+  public:
+    class Scalar {
+      public:
+        fn operator-(Scalar a) -> Scalar;
+        fn operator/(Scalar a, Scalar b) -> Scalar;
+    }
+}

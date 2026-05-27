@@ -1,0 +1,6 @@
+// Invalid: ellipsis in wrong position
+namespace bad {
+  public:
+    template<... typename Ts>
+    void f(Ts args);
+}

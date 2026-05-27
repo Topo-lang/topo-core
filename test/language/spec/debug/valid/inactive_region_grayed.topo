@@ -1,0 +1,17 @@
+// Plan 40 Phase 0 — debug block with an inactive_region (grayed mode).
+// Validates: inactive_region grammar; optional grayed/hidden mode keyword.
+
+std::import("cstdint", int32_t);
+
+namespace storage {
+  public:
+    type Buffer {
+      public:
+        int32_t cells;
+    }
+}
+
+debug Buffer {
+  view live from cells[0..256];
+  inactive_region cells[256..1024] grayed;
+}

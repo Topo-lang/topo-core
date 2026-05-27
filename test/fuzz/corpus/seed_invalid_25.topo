@@ -1,0 +1,7 @@
+using Int = std::cpp17::int;
+namespace n {
+  public:
+    void f();
+  GARBAGE HERE !!! $$$ %%%
+    void g();
+}

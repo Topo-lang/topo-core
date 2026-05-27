@@ -1,0 +1,134 @@
+// core/math.topo — Math types with operators, comptime if, and constrained template fn
+//
+// Showcases: operator overloads, comptime if for return-type selection,
+//            constrained template function, adapt for math types.
+
+import types;
+
+namespace core_math {
+
+  public:
+    // ── Vector3 with operator overloads ────────────────────────
+
+    type Vector3 {
+      public:
+        explicit Vector3(float x, float y, float z);
+        static Vector3 zero();
+        static Vector3 up();
+        static Vector3 forward();
+
+        float x() const;
+        float y() const;
+        float z() const;
+        float length() const;
+        float dot(const Vector3& other) const;
+        Vector3 normalized() const;
+        Vector3 cross(const Vector3& other) const;
+
+        // Operator overloads — declared inside the type
+        fn operator+(const Vector3& lhs, const Vector3& rhs) -> Vector3;
+        fn operator-(const Vector3& lhs, const Vector3& rhs) -> Vector3;
+        fn operator*(const Vector3& v, float s) -> Vector3;
+        fn operator==(const Vector3& lhs, const Vector3& rhs) -> bool;
+
+      private:
+        float vx;
+        float vy;
+        float vz;
+    }
+
+    type Quaternion {
+      public:
+        explicit Quaternion(float w, float x, float y, float z);
+        static Quaternion identity();
+        static Quaternion from_axis_angle(const Vector3& axis, float angle);
+        Quaternion conjugate() const;
+        Vector3 rotate(const Vector3& point) const;
+
+      private:
+        float qw;
+        float qx;
+        float qy;
+        float qz;
+    }
+
+    type Matrix4 {
+      public:
+        static Matrix4 identity();
+        static Matrix4 perspective(float fov, float aspect, float near_plane, float far_plane);
+
+        fn operator*(const Matrix4& lhs, const Matrix4& rhs) -> Matrix4;
+        Vector3 transform_point(const Vector3& p) const;
+        Matrix4 inverse() const;
+
+      private:
+        float m00;
+    }
+
+    type AABB {
+      public:
+        explicit AABB(const Vector3& min, const Vector3& max);
+        bool contains(const Vector3& point) const;
+        bool intersects(const AABB& other) const;
+        Vector3 center() const;
+
+      private:
+        Vector3 min_pt;
+        Vector3 max_pt;
+    }
+
+    // ── comptime if — select value vs reference return by size ──
+
+    template<typename T>
+    type Accessor {
+      public:
+        void set(const T& value);
+        T get() const;
+
+      private:
+        T stored;
+    }
+
+    // ── comptime if — select declarations by compile-time condition ──
+    // (comptime if is supported at namespace visibility-section level)
+
+    comptime if (sizeof(float) <= 8) {
+        float fast_dot_f32(const Vector3& a, const Vector3& b);
+    } else {
+        double fast_dot_f64(const Vector3& a, const Vector3& b);
+    }
+
+    // ── Constrained template function ──────────────────────────
+    // T must satisfy Serializable — enforced at check time.
+
+    template<typename T : Serializable>
+    T lerp(const T& a, const T& b, float t);
+
+    // ── Adapt constraints for Vector3 ──────────────────────────
+
+    adapt Serializable for Vector3 {
+        serialized_size = vec3_serialized_size;
+        serialize = vec3_serialize;
+        deserialize = vec3_deserialize;
+    }
+
+    adapt Hashable for Vector3 {
+        hash = vec3_hash;
+        equals = vec3_equals;
+    }
+
+    // ── Instantiate the comptime-if template ───────────────────
+
+    instantiate Accessor<float>;
+    instantiate Accessor<Matrix4>;
+
+  protected:
+    size_t vec3_serialized_size(const Vector3& v);
+    void vec3_serialize(const Vector3& v, int dest);
+    bool vec3_deserialize(Vector3& v, int src);
+    uint32_t vec3_hash(const Vector3& v);
+    bool vec3_equals(const Vector3& a, const Vector3& b);
+
+  internal:
+    float fast_inv_sqrt(float x);
+}

@@ -1,0 +1,12 @@
+// Priority in different visibility sections
+namespace svc {
+  public:
+    priority(critical):
+      void start();
+  protected:
+    priority(high):
+      void configure();
+  private:
+    priority(low):
+      void debug();
+}

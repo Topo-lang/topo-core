@@ -1,0 +1,12 @@
+using Int = std::cpp17::int;
+
+namespace test {
+    public:
+        Int always_visible();
+
+        comptime if (true) {
+            Int comptime_true_func();
+        } else {
+            Int comptime_false_func();
+        }
+}

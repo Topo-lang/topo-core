@@ -1,0 +1,7 @@
+// Stdlib bridging type — f64 (Plan 38 Batch 1)
+// Tests: IEEE-754 binary64 scalar with arity 0.
+
+namespace math {
+  public:
+    f64 average(f64 a, f64 b);
+}

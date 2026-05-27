@@ -1,0 +1,13 @@
+// Nested with comptime
+using Int = std::cpp17::int;
+namespace app {
+  namespace config {
+    public:
+      comptime if (true) {
+        namespace detail {
+          public:
+            void enabled();
+        }
+      }
+  }
+}

@@ -1,0 +1,10 @@
+// Basic multi-return value declarations
+
+using Int = std::cpp17::int32_t;
+using Float = std::cpp17::float;
+
+namespace math {
+  public:
+    divmod(Int a, Int b) -> (Int quotient, Int remainder);
+    sincos(Float angle) -> (Float sin_val, Float cos_val);
+}

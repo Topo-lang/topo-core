@@ -1,0 +1,14 @@
+// TEST: same symbol declared in `public:` and `private:` sections of the same
+//       namespace — a cross-visibility collision. Distinct from
+//       internal_override.topo (which pairs public/internal); this covers the
+//       public/private pair, exercising the other side of the visibility
+//       overlap matrix.
+// EXPECT-ERROR: duplicate function declaration
+
+namespace lib {
+  public:
+    void api();
+
+  private:
+    void api();
+}

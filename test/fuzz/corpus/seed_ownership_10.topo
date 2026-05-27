@@ -1,0 +1,13 @@
+// Ownership in pipeline
+std::import("data.h", Data);
+namespace pipe {
+  public:
+    void run();
+    fn run {
+      load -> transform;
+      transform -> void;
+    }
+  protected:
+    owned Data load();
+    void transform(owned Data d);
+}

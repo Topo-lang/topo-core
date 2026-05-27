@@ -1,0 +1,6 @@
+// Invalid: weak return
+std::import("handle.h", Handle);
+namespace bad {
+  public:
+    weak Handle get();
+}

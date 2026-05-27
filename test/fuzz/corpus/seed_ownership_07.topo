@@ -1,0 +1,6 @@
+// Ownership with const
+std::import("config.h", Config);
+namespace app {
+  public:
+    void read(const shared Config cfg);
+}

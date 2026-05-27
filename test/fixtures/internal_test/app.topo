@@ -1,0 +1,19 @@
+// Example: internal visibility test
+// public run() is the entry point
+// internal init() and process() should be completely eliminated from metadata
+
+namespace app {
+    public:
+        void run();
+        fn run {
+            stage<1> init();
+            stage<2> process();
+        }
+
+    protected:
+        void validate();
+
+    internal:
+        void init();
+        void process();
+}

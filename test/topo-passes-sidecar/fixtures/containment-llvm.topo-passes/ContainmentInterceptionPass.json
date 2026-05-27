@@ -1,0 +1,16 @@
+{
+  "header": {
+    "pass": "ContainmentInterceptionPass",
+    "category": "VERIFY",
+    "fired": true,
+    "fired_count": 2,
+    "decision": "applied",
+    "reason": "wrapped 2 restricted callees with containment guards",
+    "elapsed_ns": 870000
+  },
+  "entries": [
+    {"caller": "main", "intercepted_callee": "std::vector::push_back"},
+    {"caller": "main", "intercepted_callee": "std::cout::operator<<"},
+    {"caller": "worker", "intercepted_callee": "std::thread::detach"}
+  ]
+}

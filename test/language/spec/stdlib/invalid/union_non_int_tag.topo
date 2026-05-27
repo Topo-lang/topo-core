@@ -1,0 +1,9 @@
+// TEST: union whose discriminant tag (first field) is not an integer
+// scalar. The tag needs a well-defined integer encoding at the boundary,
+// so a floating-point (or any non-integer) tag is rejected.
+// EXPECT-ERROR: union<...> tag field 'kind' must be an integer scalar type
+
+namespace bad {
+  public:
+    bool take(union<kind: f64, a: i64, b: i64> u);
+}

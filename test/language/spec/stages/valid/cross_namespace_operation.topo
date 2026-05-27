@@ -1,0 +1,18 @@
+// Cross-namespace fn block: operation references function in sibling namespace
+
+namespace app {
+
+  public:
+    void run();
+
+    fn run {
+      stage<1> helpers::setup();
+      stage<2> helpers::teardown();
+    }
+
+  namespace helpers {
+    protected:
+      void setup();
+      void teardown();
+  }
+}

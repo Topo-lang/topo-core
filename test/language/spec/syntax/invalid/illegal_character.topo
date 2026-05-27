@@ -1,0 +1,7 @@
+// TEST: illegal character in source
+// EXPECT-ERROR: unexpected character
+
+namespace app {
+  public:
+    void run@();
+}

@@ -1,0 +1,13 @@
+// Boolean literals used in variable assignment expressions
+
+namespace app {
+  public:
+    void check();
+    fn check {
+      enabled = true;
+      disabled = false;
+    }
+
+  protected:
+    void helper();
+}

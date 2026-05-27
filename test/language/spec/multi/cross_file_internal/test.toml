@@ -1,0 +1,5 @@
+[test]
+description = "cross-file internal access should produce error"
+primary = "caller.topo"
+imports = ["lib.topo"]
+expect_error = "internal.*cannot be accessed"

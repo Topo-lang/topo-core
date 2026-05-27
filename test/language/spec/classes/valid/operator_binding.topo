@@ -1,0 +1,13 @@
+// Operator overload with binding target
+using int = std::cpp17::int;
+using bool = std::cpp17::bool;
+
+namespace math {
+    public:
+        class Matrix4 {
+            public:
+                int data;
+                fn operator*(Matrix4 lhs, Matrix4 rhs) -> Matrix4 = glm::mat4_mul;
+                fn operator==(Matrix4 lhs, Matrix4 rhs) -> bool = glm::mat4_eq;
+        }
+}

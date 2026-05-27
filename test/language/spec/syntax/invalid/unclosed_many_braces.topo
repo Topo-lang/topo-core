@@ -1,0 +1,12 @@
+// TEST: unclosed braces should produce error and terminate
+// EXPECT-ERROR: expected
+
+namespace app {
+  public:
+    class A {
+      public:
+        class B {
+          public:
+            class C {
+              public:
+                void f();

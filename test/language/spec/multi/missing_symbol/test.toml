@@ -1,0 +1,5 @@
+[test]
+description = "primary references a function not declared in any import"
+primary = "main.topo"
+imports = ["lib.topo"]
+expect_error = "undeclared"

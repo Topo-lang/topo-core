@@ -1,0 +1,7 @@
+// TEST: missing semicolon after function declaration
+// EXPECT-ERROR: expected ';'
+
+namespace app {
+  public:
+    void run()
+}

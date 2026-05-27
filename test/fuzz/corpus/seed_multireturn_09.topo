@@ -1,0 +1,6 @@
+// Invalid: empty return tuple
+using Int = std::cpp17::int;
+namespace bad {
+  public:
+    f(Int x) -> ();
+}

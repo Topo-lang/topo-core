@@ -1,0 +1,14 @@
+// Variable assignment in fn block operations
+
+namespace engine {
+  public:
+    void process();
+    fn process {
+      stage<1> result = compute();
+      stage<2> output = format();
+    }
+
+  protected:
+    void compute();
+    void format();
+}

@@ -1,0 +1,11 @@
+[project]
+name = "rust_basic"
+
+[topo]
+root = "topo/main.topo"
+
+[build]
+language = "rust"
+output = "rust_basic"
+
+[builder]

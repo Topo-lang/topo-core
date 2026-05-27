@@ -1,0 +1,7 @@
+// Invalid: adapt with unknown constraint
+namespace bad {
+  public:
+    adapt NonExistent for int {
+      foo = bar;
+    }
+}

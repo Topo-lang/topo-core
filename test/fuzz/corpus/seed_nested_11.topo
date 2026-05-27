@@ -1,0 +1,16 @@
+// Nested with pipeline
+namespace app {
+  namespace core {
+    namespace engine {
+      public:
+        void run();
+        fn run {
+          a -> b;
+          b -> void;
+        }
+      protected:
+        void a();
+        void b();
+    }
+  }
+}

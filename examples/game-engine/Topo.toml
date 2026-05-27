@@ -1,0 +1,29 @@
+[project]
+name = "game-engine"
+
+[topo]
+root = "topo/main.topo"
+
+[parallel]
+mode = "force"
+instrument = true
+
+[lifetime]
+mode = "force"
+
+[adaptive]
+mode = "force"
+
+[observability]
+mode = "force"
+exporter = "stdout"
+
+[optimize.indirection]
+mode = "force"
+
+[optimize.data-layout]
+mode = "force"
+
+[completeness]
+ignore_constructors = true
+ignore_main = true

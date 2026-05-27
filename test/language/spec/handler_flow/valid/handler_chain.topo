@@ -1,0 +1,18 @@
+// handler / flow — a linear chain of pure logic units.
+// Each handler is a single-In single-Out Functor whose In/Out are
+// stdlib bridging types (scalar + record). The flow wires them into a
+// DAG; both forms desugar onto FnDecl / pipeline FnLogicBlock and pass
+// the frontend identically to fn / pipeline.
+
+namespace orders {
+  public:
+    handler parse(string raw) -> record<id: i64, amount: f64>;
+    handler validate(record<id: i64, amount: f64> o) -> record<id: i64, amount: f64>;
+    handler persist(record<id: i64, amount: f64> o) -> bool;
+
+    flow pipeline {
+      parse -> validate;
+      validate -> persist;
+      persist -> void;
+    }
+}

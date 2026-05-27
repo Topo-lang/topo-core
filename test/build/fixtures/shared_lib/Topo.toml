@@ -1,0 +1,17 @@
+[project]
+name = "shared_lib"
+
+[topo]
+root = "topo/main.topo"
+
+[build]
+sources = ["src/hashlib.cpp"]
+include = ["include"]
+standard = "c++17"
+output = "hashlib"
+output_type = "shared"
+
+[builder]
+mode = "aggressive"
+obfuscation = "salted"
+obfuscation_salt = "demo_2026"

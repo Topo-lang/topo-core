@@ -1,0 +1,10 @@
+import zebra;
+import alpha;
+
+using SizeT = std::cpp17::size_t;
+using IntPtr = std::cpp17::intptr_t;
+
+namespace app {
+    public:
+        void run();
+}

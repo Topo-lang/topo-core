@@ -1,0 +1,16 @@
+// TEST: circular constraint inheritance
+// EXPECT-ERROR: circular constraint inheritance
+// EXPECT-ERRORS: 2
+
+using Bool = std::cpp17::bool;
+
+namespace test {
+    public:
+        constraint A : B {
+            Bool check_a(T x);
+        }
+
+        constraint B : A {
+            Bool check_b(T x);
+        }
+}

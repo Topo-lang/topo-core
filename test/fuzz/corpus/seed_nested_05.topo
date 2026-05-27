@@ -1,0 +1,14 @@
+namespace l1 {
+  namespace l2 {
+    namespace l3 {
+      namespace l4 {
+        namespace l5 {
+          namespace l6 {
+            public:
+              void f();
+          }
+        }
+      }
+    }
+  }
+}

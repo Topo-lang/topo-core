@@ -1,0 +1,4 @@
+namespace x {
+  public:
+    void a();
+}

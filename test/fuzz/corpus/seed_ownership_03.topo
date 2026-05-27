@@ -1,0 +1,5 @@
+std::import("observer.h", Observer);
+namespace ev {
+  public:
+    void subscribe(weak Observer obs);
+}

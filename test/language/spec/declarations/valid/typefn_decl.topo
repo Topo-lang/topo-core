@@ -1,0 +1,13 @@
+// Type function declaration
+// Tests BNF rule 08.8: typefn_decl
+
+namespace meta {
+  public:
+    typefn Wider(typename T) -> typename {
+      match T {
+        Float => Double,
+        Int => Long,
+        _ => T,
+      }
+    }
+}

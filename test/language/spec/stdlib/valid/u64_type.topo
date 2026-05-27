@@ -1,0 +1,8 @@
+// Stdlib bridging type — u64 (Plan 38 Batch 2 width-extension)
+// Tests: unsigned 64-bit integer scalar with arity 0.
+
+namespace timing {
+  public:
+    u64 nowNs();
+    u64 add(u64 a, u64 b);
+}

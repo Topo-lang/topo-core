@@ -1,0 +1,18 @@
+// TEST: negative stage numbers must be rejected at parse time
+// EXPECT-ERROR: stage number must be non-negative
+// Regression for fuzz-transpile-differential crash (crash-a54cdad2...)
+// Previously triggered `std::invalid_argument: stoi: no conversion` via
+// libc++abi uncaught-exception terminate in the parser.
+
+namespace app {
+  public:
+    void run();
+    fn run {
+      stage<1> a();
+      stage<-1> b();
+    }
+
+  protected:
+    void a();
+    void b();
+}

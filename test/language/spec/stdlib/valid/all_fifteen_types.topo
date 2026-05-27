@@ -1,0 +1,12 @@
+// Combined fixture: the 6 core + 8 width-extension + bytes stdlib types
+// (15 scalar/generic-shaped types) in one declaration, covering parser
+// dispatch + sema validation paths together. The composite types
+// record<...> and array<T,N> carry their own dedicated fixtures.
+
+namespace boundary {
+  public:
+    bool valid(i64 id, f64 score, string label,
+               optional<i64> parent, slice<f64> samples,
+               u8 tag, i32 count, u32 hash, u64 ts, f32 norm,
+               i8 trim, i16 pcm, u16 port, bytes raw);
+}

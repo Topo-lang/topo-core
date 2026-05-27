@@ -1,0 +1,19 @@
+// Expression test fixture
+
+using int = std::cpp17::int;
+
+namespace calc {
+
+  public:
+    void compute();
+
+    fn compute {
+      stage<1> init();
+      result = getValue() + 1;
+      flag = a > b && c != 0;
+    }
+
+  protected:
+    void init();
+    int getValue();
+}

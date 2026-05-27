@@ -1,0 +1,11 @@
+// Type adapter: adapt abstract type for custom type
+
+namespace math {
+  public:
+    void compute();
+
+    adapt integer for CustomInt {
+        from = custom_int_from_int;
+        to = custom_int_to_int;
+    }
+}

@@ -1,0 +1,7 @@
+using Int = std::cpp17::int;
+namespace ct {
+  public:
+    comptime if (sizeof(Int) <= 8) {
+      void small_type();
+    }
+}

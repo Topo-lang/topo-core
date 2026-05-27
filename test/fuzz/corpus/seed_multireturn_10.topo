@@ -1,0 +1,7 @@
+// Multi-return + hints
+using Int = std::cpp17::int;
+using Float = std::cpp17::float;
+namespace data {
+  public:
+    analyze(Array items) -> (Float mean, Float variance), cardinality(1k..100k), access(streaming);
+}

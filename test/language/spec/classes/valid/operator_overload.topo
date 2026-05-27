@@ -1,0 +1,17 @@
+// Operator overload declarations in class
+using int = std::cpp17::int;
+using bool = std::cpp17::bool;
+
+namespace math {
+    public:
+        class Vector3 {
+            public:
+                int x;
+                int y;
+                int z;
+                fn operator+(Vector3 lhs, Vector3 rhs) -> Vector3;
+                fn operator-(Vector3 lhs, Vector3 rhs) -> Vector3;
+                fn operator==(Vector3 lhs, Vector3 rhs) -> bool;
+                fn operator!=(Vector3 lhs, Vector3 rhs) -> bool;
+        }
+}

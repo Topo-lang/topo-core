@@ -1,0 +1,17 @@
+// Nested namespaces with different visibility
+namespace outer {
+  public:
+    void pub_func();
+  private:
+    void priv_func();
+  namespace inner {
+    public:
+      void inner_pub();
+    private:
+      void inner_priv();
+    namespace core {
+      internal:
+        void internal_func();
+    }
+  }
+}

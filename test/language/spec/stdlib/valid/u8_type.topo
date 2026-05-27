@@ -1,0 +1,10 @@
+// Stdlib bridging type — u8 (width-extension scalar).
+// Tests: unsigned 8-bit integer scalar with arity 0.
+// (Namespace is `octets`, not `bytes`: `bytes` is now a reserved
+// stdlib keyword and cannot be an identifier.)
+
+namespace octets {
+  public:
+    u8 read();
+    u8 add(u8 left, u8 right);
+}

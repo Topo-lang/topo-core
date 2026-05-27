@@ -1,0 +1,9 @@
+// Owned and shared as return types (valid, only weak is prohibited)
+
+std::import("widget.h", Widget);
+
+namespace factory {
+  public:
+    owned Widget create();
+    shared Widget getShared();
+}

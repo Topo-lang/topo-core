@@ -1,0 +1,11 @@
+using int = std::cpp17::int;
+using bool = std::cpp17::bool;
+namespace cmp {
+  public:
+    class Val {
+      public:
+        int v;
+        fn operator<=(Val a, Val b) -> bool;
+        fn operator>=(Val a, Val b) -> bool;
+    }
+}

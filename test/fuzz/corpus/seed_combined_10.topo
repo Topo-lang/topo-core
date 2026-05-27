@@ -1,0 +1,15 @@
+// Class + template + ownership + operator
+using Int = std::cpp17::int;
+using Bool = std::cpp17::bool;
+std::import("node.h", Node);
+namespace tree {
+  public:
+    template<typename T>
+    class BST {
+      public:
+        void insert(owned T item);
+        Bool find(shared T item);
+        fn operator==(BST a, BST b) -> Bool;
+    }
+    instantiate BST<Node>;
+}

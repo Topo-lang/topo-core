@@ -1,0 +1,96 @@
+// engine/physics.topo — Constraint + adapt + template in pipeline context
+//
+// Showcases: constraint defines eligibility, adapt satisfies it for concrete
+// types, constrained template uses the bound, 5-stage pipeline with
+// multi-return passing structured data between stages
+
+using int = std::cpp17::int;
+using float = std::cpp17::float;
+using bool = std::cpp17::bool;
+
+namespace engine::physics {
+
+  // ── Types ─────────────────────────────────────────────────────────
+  public:
+    type Vector3 {
+      public:
+        float x() const;
+        float y() const;
+        float z() const;
+    }
+
+    type AABB {
+      public:
+        bool intersects(const AABB& other) const;
+    }
+
+    type RigidBody {
+      public:
+        void apply_force(const Vector3& force);
+        void set_mass(float mass);
+        Vector3 velocity() const;
+
+      private:
+        Vector3 pos;
+        Vector3 vel;
+        float mass;
+    }
+
+    type ContactPoint {}
+    type CollisionResult {}
+
+  // ── Constraint — what types can enter the collision pipeline ───────
+  public:
+    constraint Collidable {
+      AABB bounding_box();
+      int collision_layer();
+      bool is_static();
+    }
+
+  // ── Adapt — make RigidBody satisfy Collidable ─────────────────────
+  public:
+    adapt Collidable for RigidBody {
+      bounding_box = rigid_bounding_box;
+      collision_layer = rigid_collision_layer;
+      is_static = rigid_is_static;
+    }
+
+  // ── Constrained template — only Collidable types enter the grid ────
+  public:
+    template<typename T : Collidable>
+    type SpatialGrid {
+      public:
+        void insert(const T& obj, const AABB& bounds);
+        void remove(const T& obj);
+        int query(const AABB& region) const;
+        void clear();
+    }
+
+    instantiate SpatialGrid<RigidBody>;
+
+  // ── 5-stage physics step with multi-return ────────────────────────
+  public:
+    int step(int world_state);
+
+    fn step {
+      stage<1> integrate_forces(world_state) -> forces;
+      stage<2> broadphase(forces) -> pairs;
+      stage<3> narrowphase(pairs) -> contacts;
+      stage<4> solve_constraints(contacts) -> solved;
+      stage<5> integrate_velocities(solved);
+    }
+
+  protected:
+    int integrate_forces(int world_state);
+    broadphase(int forces) -> (int pair_count, int pair_buffer);
+    int narrowphase(int pair_count, int pair_buffer);
+    int solve_constraints(int contacts);
+    void integrate_velocities(int solved);
+    AABB rigid_bounding_box(const RigidBody& body);
+    int rigid_collision_layer(const RigidBody& body);
+    bool rigid_is_static(const RigidBody& body);
+
+  internal:
+    void debug_draw_contacts();
+    void debug_draw_grid();
+}

@@ -1,0 +1,6 @@
+// Invalid priority level
+namespace bad {
+  public:
+    priority(urgent):
+      void f();
+}

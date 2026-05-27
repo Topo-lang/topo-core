@@ -1,0 +1,6 @@
+namespace n {
+  public:
+    fn run {
+      a -> ;
+    }
+}

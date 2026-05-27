@@ -1,0 +1,15 @@
+// Discard binding with _ in return binding destructuring
+
+using Int = std::cpp17::int32_t;
+
+namespace engine {
+  public:
+    execute(Int x) -> (Int result, Int status);
+    void run();
+    fn run {
+      execute() -> (_, s);
+    }
+
+  protected:
+    void helper();
+}

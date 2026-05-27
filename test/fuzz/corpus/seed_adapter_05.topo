@@ -1,0 +1,22 @@
+// constraint + adapt + template
+using Int = std::cpp17::int;
+using Bool = std::cpp17::bool;
+namespace coll {
+  public:
+    constraint Hashable {
+      Int hash(T val);
+      Bool eq(T a, T b);
+    }
+    adapt Hashable for Int {
+      hash = int_hash;
+      eq = int_eq;
+    }
+    Int int_hash(Int v);
+    Bool int_eq(Int a, Int b);
+    template<typename K : Hashable>
+    class Set {
+      public:
+        void insert(K key);
+    }
+    instantiate Set<Int>;
+}

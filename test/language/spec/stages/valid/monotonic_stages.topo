@@ -1,0 +1,16 @@
+// Monotonic stage numbering
+
+namespace proc {
+  public:
+    void run();
+    fn run {
+      stage<1> init();
+      stage<2> compute();
+      stage<3> finalize();
+    }
+
+  protected:
+    void init();
+    void compute();
+    void finalize();
+}

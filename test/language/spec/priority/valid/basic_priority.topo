@@ -1,0 +1,25 @@
+// Basic priority section usage within visibility sections.
+namespace engine::core {
+    public:
+        priority(critical):
+            void init();
+            void start();
+
+        priority(high):
+            void process();
+
+        // Normal priority (implicit default)
+        void update();
+
+        priority(low):
+            void cleanup();
+
+        priority(background):
+            void log_stats();
+
+    private:
+        priority(high):
+            void internal_compute();
+
+        void helper();
+}

@@ -1,0 +1,12 @@
+// TEST: external-on-type
+// EXPECT-ERROR: 'external' can only modify function declarations
+
+namespace app {
+
+public:
+  external type Config {
+  public:
+    int value;
+  }
+
+}

@@ -1,0 +1,19 @@
+// A flow with two independent handlers fed by the same source — they
+// become parallel candidates in one stage (same DAG shape a parallel
+// pipeline produces). PurityCheck guards those parallel handlers.
+
+namespace pricing {
+  public:
+    handler ingest(string raw) -> i64;
+    handler scoreA(i64 id) -> f64;
+    handler scoreB(i64 id) -> f64;
+    handler decide(f64 s) -> bool;
+
+    flow decision {
+      ingest -> scoreA;
+      ingest -> scoreB;
+      scoreA -> decide;
+      scoreB -> decide;
+      decide -> void;
+    }
+}

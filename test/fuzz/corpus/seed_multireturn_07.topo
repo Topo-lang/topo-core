@@ -1,0 +1,6 @@
+// Many return values
+using Int = std::cpp17::int;
+namespace many {
+  public:
+    decompose(Int val) -> (Int a, Int b, Int c, Int d, Int e);
+}

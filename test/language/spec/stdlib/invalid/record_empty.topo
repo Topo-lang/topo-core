@@ -1,0 +1,8 @@
+// TEST: record<> with no fields — a zero-field record carries no
+// boundary contract and is rejected by Sema.
+// EXPECT-ERROR: record<...> must declare at least one field
+
+namespace bad {
+  public:
+    bool take(record<> r);
+}

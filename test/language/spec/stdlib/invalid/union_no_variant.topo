@@ -1,0 +1,8 @@
+// TEST: union<> with fewer than two fields — a tag with no variant carries
+// no boundary contract and is rejected by Sema.
+// EXPECT-ERROR: union<...> must declare a tag field and at least one variant
+
+namespace bad {
+  public:
+    bool take(union<tag: u8> u);
+}

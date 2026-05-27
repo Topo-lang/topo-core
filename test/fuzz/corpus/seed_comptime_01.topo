@@ -1,0 +1,5 @@
+using Int = std::cpp17::int;
+namespace ct {
+  public:
+    comptime fn factorial(int n) -> int { n <= 1 ? 1 : n * factorial(n - 1) }
+}

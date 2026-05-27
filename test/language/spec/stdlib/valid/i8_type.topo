@@ -1,0 +1,8 @@
+// Stdlib bridging type — i8 (width-extension: signed 8-bit)
+// Tests: signed 8-bit integer scalar with arity 0.
+
+namespace sensor {
+  public:
+    i8 read();
+    i8 delta(i8 left, i8 right);
+}

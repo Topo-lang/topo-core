@@ -1,0 +1,14 @@
+// TEST: cross-namespace pipeline references undeclared function
+// EXPECT-ERROR: undeclared function
+
+using int = std::cpp17::int;
+
+namespace app {
+
+  public:
+    void run();
+
+    fn run {
+      stage<1> ghost::phantom();
+    }
+}

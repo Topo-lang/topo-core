@@ -1,0 +1,9 @@
+namespace engine {
+ public:
+  void render();
+   void update();
+protected:
+      void loadShaders();
+ private:
+        void cleanup();
+}

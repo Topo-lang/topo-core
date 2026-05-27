@@ -1,0 +1,7 @@
+// S-OWN-005: ownership qualifier on primitive type
+// EXPECT-ERROR: meaningless.*primitive.*S-OWN-005
+
+namespace test {
+  public:
+    void update(owned int x);
+}

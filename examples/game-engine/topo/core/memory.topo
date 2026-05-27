@@ -1,0 +1,104 @@
+// core/memory.topo — Lifetime scopes, priority tiers, and ownership integration
+//
+// Showcases: all three lifetime forms (bounded, bounded, open-ended),
+//            priority sections, ownership qualifiers, comptime fn,
+//            staged fn block aligned with lifetime boundaries.
+
+import types;
+
+namespace core_memory {
+
+  // ── Three lifetime forms ───────────────────────────────────
+  // Bounded range: both endpoints are declared functions
+  lifetime frame_scope = begin_frame..end_frame;
+  lifetime level_scope = load_level..unload_level;
+
+  // Open-ended: no termination point (lives until process exit)
+  lifetime session_scope = init_memory..;
+
+  // ── Critical-priority frame allocation ─────────────────────
+  // These run every frame; priority(critical) marks them for scheduling.
+
+  public:
+    priority(critical):
+    void begin_frame();
+    void end_frame();
+    int frame_alloc(size_t size, size_t alignment);
+    void frame_reset();
+
+  // ── Normal-priority level allocation ───────────────────────
+
+  public:
+    void load_level(int level_id);
+    void unload_level();
+    int level_alloc(size_t size);
+    size_t level_bytes_used();
+
+    // ── Ownership on allocator handles ─────────────────────
+    // owned  = exclusive transfer (caller loses access)
+    // shared = reference-counted sharing
+    // weak   = non-owning probe (may be invalid)
+
+    type ArenaHandle {
+      public:
+        size_t capacity() const;
+        size_t bytes_used() const;
+        bool is_valid() const;
+
+      private:
+        int handle_id;
+    }
+
+    type PoolHandle {
+      public:
+        int alloc_slot();
+        void free_slot(int slot);
+
+      private:
+        int pool_id;
+    }
+
+    type CacheRef {
+      public:
+        bool is_alive() const;
+        int get() const;
+
+      private:
+        int ref_id;
+    }
+
+    void acquire_arena(owned ArenaHandle arena);
+    void share_pool(shared PoolHandle pool);
+    bool probe_cache(weak CacheRef ref);
+
+    // ── Staged fn: frame memory cycle ──────────────────────
+    // Stages align with frame_scope lifetime boundaries.
+
+    void frame_cycle();
+
+    fn frame_cycle {
+      stage<1> begin_frame();
+      stage<2> frame_alloc(64, 16) -> frame_block;
+      stage<3> frame_reset();
+      stage<4> end_frame();
+    }
+
+  // ── Background-priority maintenance ────────────────────────
+
+  public:
+    priority(background):
+    void defragment_arena();
+    void collect_garbage();
+
+  protected:
+    // ── Compile-time arena sizing ──────────────────────────────
+    comptime fn default_arena_size(int entity_count) -> int { entity_count * 256 }
+
+    void init_memory(size_t frame_budget, size_t level_budget);
+    void reset_frame_arena();
+    size_t frame_bytes_used();
+
+  private:
+    void grow_arena(size_t min_size);
+    void coalesce_free_blocks();
+}

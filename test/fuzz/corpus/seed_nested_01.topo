@@ -1,0 +1,4 @@
+namespace a { namespace b { namespace c { namespace d { namespace e {
+  public:
+    void deep();
+}}}}}

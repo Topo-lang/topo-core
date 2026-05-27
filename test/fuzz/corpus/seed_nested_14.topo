@@ -1,0 +1,15 @@
+// Nested classes with operators
+using Int = std::cpp17::int;
+using Bool = std::cpp17::bool;
+namespace math {
+  public:
+    class Outer {
+      public:
+        class Inner {
+          public:
+            Int val;
+            fn operator+(Inner a, Inner b) -> Inner;
+            fn operator==(Inner a, Inner b) -> Bool;
+        }
+    }
+}

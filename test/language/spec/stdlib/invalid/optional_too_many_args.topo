@@ -1,0 +1,7 @@
+// TEST: optional<i64, f64> with too many type parameters
+// EXPECT-ERROR: stdlib type 'optional' takes 1 type parameter
+
+namespace bad {
+  public:
+    optional<i64, f64> badReturn();
+}

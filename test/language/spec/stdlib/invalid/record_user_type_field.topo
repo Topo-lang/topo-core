@@ -1,0 +1,9 @@
+// TEST: record field whose type is a bare (undeclared) user type.
+// The cross-language byte contract is only defined over stdlib types,
+// so a non-stdlib field type is rejected.
+// EXPECT-ERROR: invalid type of record field 'payload'
+
+namespace bad {
+  public:
+    bool take(record<id: i64, payload: SomeUserStruct> r);
+}

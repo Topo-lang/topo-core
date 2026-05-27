@@ -1,0 +1,7 @@
+// TEST: array<i64, 0> with N below the >= 1 minimum
+// EXPECT-ERROR: array<T, N>: N must be >= 1
+
+namespace bad {
+  public:
+    array<i64, 0> emptyBuf();
+}

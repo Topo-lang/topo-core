@@ -1,0 +1,11 @@
+// Compile-time function declaration
+// Tests BNF rule 08.6: comptime_fn
+
+using Int = std::cpp17::int32_t;
+
+namespace meta {
+  public:
+    comptime fn factorial(Int N) -> Int { N }
+
+    comptime fn double_val(Int X) -> Int { X }
+}

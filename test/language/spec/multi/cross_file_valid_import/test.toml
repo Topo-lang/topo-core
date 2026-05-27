@@ -1,0 +1,4 @@
+[test]
+description = "cross-file public function access should succeed"
+primary = "caller.topo"
+imports = ["lib.topo"]

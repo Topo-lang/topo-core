@@ -1,0 +1,5 @@
+namespace n {
+  public:
+    template<typename T
+    void f(T x);
+}

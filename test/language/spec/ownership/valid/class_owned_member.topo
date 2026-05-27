@@ -1,0 +1,17 @@
+// Ownership qualifiers on class member variables
+
+std::import("mesh.h", Mesh);
+std::import("material.h", Material);
+
+namespace scene {
+  public:
+    class SceneNode {
+      public:
+        shared Mesh mesh;
+        owned Material material;
+        weak SceneNode parent;
+        void render() const;
+    }
+
+    void traverse(shared SceneNode root);
+}

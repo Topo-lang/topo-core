@@ -1,0 +1,12 @@
+// comptime if with class inside
+using Int = std::cpp17::int;
+namespace ct {
+  public:
+    comptime if (true) {
+      class Widget {
+        public:
+          Int id;
+          void activate();
+      }
+    }
+}

@@ -1,0 +1,15 @@
+// Basic class with members, constructor, destructor
+
+using Int = std::cpp17::int32_t;
+
+namespace app {
+  public:
+    class Widget {
+      public:
+        Widget(Int id);
+        ~Widget();
+        Int getId() const;
+      private:
+        Int id;
+    }
+}

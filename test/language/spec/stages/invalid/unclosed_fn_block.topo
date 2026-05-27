@@ -1,0 +1,9 @@
+// TEST: unclosed fn block brace
+// EXPECT-ERROR: close namespace
+
+namespace app {
+  public:
+    void run();
+    fn run {
+      stage<1> init();
+}

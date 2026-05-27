@@ -1,0 +1,9 @@
+// TEST: multi-return with only one return parameter
+// EXPECT-ERROR: at least 2
+
+using Int = std::cpp17::int32_t;
+
+namespace app {
+  public:
+    compute(Int x) -> (Int only);
+}

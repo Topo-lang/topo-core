@@ -1,0 +1,8 @@
+// Single character identifiers everywhere
+namespace a {
+  public:
+    void b();
+    void c();
+  private:
+    void d();
+}

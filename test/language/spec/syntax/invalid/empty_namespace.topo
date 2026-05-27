@@ -1,0 +1,7 @@
+// TEST: namespace with number instead of identifier
+// EXPECT-ERROR: expected
+
+namespace 123 {
+  public:
+    void run();
+}

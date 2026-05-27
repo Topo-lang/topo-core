@@ -1,0 +1,1 @@
+{"functions":{"foo::bar":{"qualifiedName":"foo::bar","simpleName":"bar","visibility":"public","returnType":{"nameParts":["void"]},"parameters":[]}},"logicBlocks":{},"classes":{},"constraints":{},"typeAliases":{},"imports":[],"callSites":[],"instantiates":[],"adapts":[],"lifetimeGroups":[]}

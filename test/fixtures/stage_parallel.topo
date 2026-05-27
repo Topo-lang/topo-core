@@ -1,0 +1,37 @@
+// Test fixture for stage parallel safety verification
+
+using Int = std::cpp17::int;
+
+namespace compute {
+
+  public:
+    void run();
+    void run_dep();
+    void run_single();
+
+    fn run {
+      stage<1> opA();
+      stage<1> opB();
+      stage<2> finalize();
+    }
+
+    fn run_dep {
+      stage<1> produce();
+      stage<1> consume();
+      stage<2> finalize();
+    }
+
+    fn run_single {
+      stage<1> solo();
+      stage<2> finish();
+    }
+
+  protected:
+    void opA();
+    void opB();
+    Int produce();
+    void consume();
+    void finalize();
+    void solo();
+    void finish();
+}

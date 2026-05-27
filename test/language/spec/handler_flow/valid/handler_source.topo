@@ -1,0 +1,13 @@
+// A source handler consumes nothing (empty input) and produces a
+// stdlib value — the zero-input form is valid.
+
+namespace feed {
+  public:
+    handler tick() -> i64;
+    handler sink(i64 v) -> bool;
+
+    flow stream {
+      tick -> sink;
+      sink -> void;
+    }
+}

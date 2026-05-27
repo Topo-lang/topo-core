@@ -1,0 +1,7 @@
+// Three return values
+using Int = std::cpp17::int;
+using Float = std::cpp17::float;
+namespace stat {
+  public:
+    stats(Array data) -> (Float min, Float max, Float mean);
+}

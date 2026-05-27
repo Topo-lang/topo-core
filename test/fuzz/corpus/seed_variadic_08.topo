@@ -1,0 +1,6 @@
+// Multiple variadic packs (invalid)
+namespace bad {
+  public:
+    template<typename... A, typename... B>
+    void f(A... a, B... b);
+}

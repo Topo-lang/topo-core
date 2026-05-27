@@ -1,0 +1,8 @@
+// File import declaration
+
+import other;
+
+namespace caller {
+  public:
+    void invoke();
+}

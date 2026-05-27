@@ -1,0 +1,6 @@
+// Library with public function in shared namespace
+
+namespace shared {
+  public:
+    void serve();
+}

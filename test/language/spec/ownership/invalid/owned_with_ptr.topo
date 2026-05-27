@@ -1,0 +1,9 @@
+// S-OWN-001: ownership qualifier + * modifier are mutually exclusive
+// EXPECT-ERROR: mutually exclusive.*S-OWN-001
+
+std::import("particle.h", Particle);
+
+namespace test {
+  public:
+    void update(owned Particle* p);
+}

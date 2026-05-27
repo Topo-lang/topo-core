@@ -1,0 +1,7 @@
+namespace sig {
+    public:
+        void short_fn(int x);
+        void very_long_function_name_that_should_trigger_multiline_formatting(const std::string& input, int count, bool flag);
+    protected:
+        compute(int x, int y) -> (int sum, int product);
+}

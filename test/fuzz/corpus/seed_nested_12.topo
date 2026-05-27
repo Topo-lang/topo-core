@@ -1,0 +1,15 @@
+// Nested with stages
+using Int = std::cpp17::int;
+namespace app::engine::render {
+  public:
+    void frame();
+    fn frame {
+      stage<1> load();
+      stage<2> draw();
+      stage<3> present();
+    }
+  protected:
+    void load();
+    void draw();
+    void present();
+}

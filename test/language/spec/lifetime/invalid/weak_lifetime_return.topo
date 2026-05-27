@@ -1,0 +1,20 @@
+// TEST: lifetime imbalance — a function declares a `weak` return type inside a
+//       lifetime-annotated signature (`lifetime<frame, int>`). Caller cannot
+//       guarantee the weak reference survives the callee's lifetime scope, so
+//       sema must reject under S-OWN-003.
+//       Distinct from missing_assign.topo / missing_semicolon.topo (which are
+//       syntactic); this is the first genuinely SEMANTIC lifetime invalid
+//       fixture in this directory.
+// EXPECT-ERROR: weak.*S-OWN-003
+
+using int = std::cpp17::int;
+
+namespace engine {
+  lifetime frame = begin..end;
+
+  public:
+    weak lifetime<frame, int> getRef();
+
+    void begin();
+    void end();
+}

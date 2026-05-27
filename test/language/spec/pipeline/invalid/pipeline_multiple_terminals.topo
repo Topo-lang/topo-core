@@ -1,0 +1,15 @@
+// TEST: pipeline with multiple terminal edges
+// EXPECT-ERROR: terminal
+
+namespace app {
+  public:
+    void run();
+    fn run {
+      a -> void;
+      b -> void;
+    }
+
+  protected:
+    void a();
+    void b();
+}

@@ -1,0 +1,342 @@
+# Topo Language Test Coverage Matrix
+#
+# Maps spec rules to test files. Each entry tracks which .topo test file(s)
+# exercise a specific language rule from the spec documents.
+#
+# Usage: python scripts/test-coverage.py
+
+[spec-07-syntax]
+description = "Lexer and basic syntax rules"
+
+[[spec-07-syntax.rules]]
+id = "07.1"
+description = "Comments (line and block)"
+tests = ["syntax/valid/comments_everywhere.topo"]
+
+[[spec-07-syntax.rules]]
+id = "07.2"
+description = "Namespace declarations"
+tests = ["syntax/valid/empty_namespace.topo", "syntax/valid/nested_namespace.topo"]
+
+[[spec-07-syntax.rules]]
+id = "07.3"
+description = "Unterminated string literal error"
+tests = ["syntax/invalid/unterminated_string.topo"]
+
+[[spec-07-syntax.rules]]
+id = "07.4"
+description = "Unterminated block comment error"
+tests = ["syntax/invalid/unterminated_block_comment.topo"]
+
+[[spec-07-syntax.rules]]
+id = "07.5"
+description = "Illegal character error"
+tests = ["syntax/invalid/illegal_character.topo"]
+
+[[spec-07-syntax.rules]]
+id = "07.6"
+description = "Unexpected token error"
+tests = ["syntax/invalid/unexpected_token.topo"]
+
+[[spec-07-syntax.rules]]
+id = "07.7"
+description = "Missing semicolon error"
+tests = ["syntax/invalid/missing_semicolon.topo"]
+
+[[spec-07-syntax.rules]]
+id = "07.8"
+description = "Unclosed namespace error"
+tests = ["syntax/invalid/unclosed_namespace.topo"]
+
+[[spec-07-syntax.rules]]
+id = "07.9"
+description = "Missing right parenthesis error"
+tests = ["syntax/invalid/missing_rparen.topo"]
+
+[[spec-07-syntax.rules]]
+id = "07.10"
+description = "Empty namespace error"
+tests = ["syntax/invalid/empty_namespace.topo"]
+
+[spec-08-declarations]
+description = "Declarations and types"
+
+[[spec-08-declarations.rules]]
+id = "08.1"
+description = "Function declaration"
+tests = ["declarations/valid/minimal_function.topo"]
+
+[[spec-08-declarations.rules]]
+id = "08.2"
+description = "Using type aliases"
+tests = ["declarations/valid/using_alias.topo"]
+
+[[spec-08-declarations.rules]]
+id = "08.3"
+description = "Standard library imports"
+tests = ["declarations/valid/std_import.topo"]
+
+[[spec-08-declarations.rules]]
+id = "08.4"
+description = "File imports"
+tests = ["declarations/valid/file_import.topo"]
+
+[[spec-08-declarations.rules]]
+id = "08.5"
+description = "Invalid return type error"
+tests = ["declarations/invalid/invalid_return_type.topo"]
+
+[[spec-08-declarations.rules]]
+id = "08.6"
+description = "Duplicate function error"
+tests = ["declarations/invalid/duplicate_function.topo"]
+
+[[spec-08-declarations.rules]]
+id = "08.7"
+description = "Bare int without using error"
+tests = ["declarations/invalid/bare_int_without_using.topo"]
+
+[[spec-08-declarations.rules]]
+id = "08.8"
+description = "Unknown type error"
+tests = ["declarations/invalid/unknown_type.topo"]
+
+[spec-09-stages]
+description = "Logical stages and fn blocks"
+
+[[spec-09-stages.rules]]
+id = "09.1"
+description = "Monotonic stage numbering"
+tests = ["stages/valid/monotonic_stages.topo"]
+
+[[spec-09-stages.rules]]
+id = "09.2"
+description = "Automatic stage assignment"
+tests = ["stages/valid/auto_stage_assignment.topo"]
+
+[[spec-09-stages.rules]]
+id = "09.3"
+description = "Parallel operations in same stage"
+tests = ["stages/valid/parallel_same_stage.topo"]
+
+[[spec-09-stages.rules]]
+id = "09.4"
+description = "Cross-namespace operations"
+tests = ["stages/valid/cross_namespace_operation.topo"]
+
+[[spec-09-stages.rules]]
+id = "09.5"
+description = "Basic fn block syntax"
+tests = ["stages/valid/fn_block_basic.topo"]
+
+[[spec-09-stages.rules]]
+id = "09.6"
+description = "Unclosed fn block error"
+tests = ["stages/invalid/unclosed_fn_block.topo"]
+
+[[spec-09-stages.rules]]
+id = "09.7"
+description = "Duplicate fn block error"
+tests = ["stages/invalid/duplicate_fn_block.topo"]
+
+[[spec-09-stages.rules]]
+id = "09.8"
+description = "Orphan fn block error"
+tests = ["stages/invalid/orphan_fn_block.topo"]
+
+[[spec-09-stages.rules]]
+id = "09.9"
+description = "Undeclared operation error"
+tests = ["stages/invalid/undeclared_operation.topo"]
+
+[[spec-09-stages.rules]]
+id = "09.10"
+description = "Stage monotonicity violation error"
+tests = ["stages/invalid/stage_monotonicity.topo"]
+
+[[spec-09-stages.rules]]
+id = "09.11"
+description = "Duplicate stage name error"
+tests = ["stages/invalid/stage_duplicate_name.topo"]
+
+[[spec-09-stages.rules]]
+id = "09.12"
+description = "Cross-namespace undeclared error"
+tests = ["stages/invalid/cross_namespace_undeclared.topo"]
+
+[spec-10-visibility]
+description = "Visibility system"
+
+[[spec-10-visibility.rules]]
+id = "10.1"
+description = "All visibility levels (public/protected/private)"
+tests = ["visibility/valid/visibility_all_levels.topo"]
+
+[[spec-10-visibility.rules]]
+id = "10.2"
+description = "Internal section"
+tests = ["visibility/valid/internal_section.topo"]
+
+[[spec-10-visibility.rules]]
+id = "10.3"
+description = "Internal namespace"
+tests = ["visibility/valid/internal_namespace.topo"]
+
+[[spec-10-visibility.rules]]
+id = "10.4"
+description = "Duplicate visibility error"
+tests = ["visibility/invalid/duplicate_visibility.topo"]
+
+[[spec-10-visibility.rules]]
+id = "10.5"
+description = "Internal override behavior error"
+tests = ["visibility/invalid/internal_override.topo"]
+
+[spec-05-multireturn]
+description = "Multi-return values"
+
+[[spec-05-multireturn.rules]]
+id = "05.1"
+description = "Basic multi-return declaration"
+tests = ["multireturn/valid/basic_multireturn.topo"]
+
+[[spec-05-multireturn.rules]]
+id = "05.2"
+description = "Too few return parameters error"
+tests = ["multireturn/invalid/multireturn_too_few.topo", "multireturn/invalid/too_many_returns.topo"]
+
+[[spec-05-multireturn.rules]]
+id = "05.3"
+description = "Duplicate return parameter error"
+tests = ["multireturn/invalid/multireturn_duplicate_param.topo"]
+
+[spec-06-pipeline]
+description = "Pipeline functions"
+
+[[spec-06-pipeline.rules]]
+id = "06.1"
+description = "Basic linear pipeline"
+tests = ["pipeline/valid/basic_linear.topo"]
+
+[[spec-06-pipeline.rules]]
+id = "06.2"
+description = "Diamond DAG pipeline"
+tests = ["pipeline/valid/diamond_dag.topo"]
+
+[[spec-06-pipeline.rules]]
+id = "06.3"
+description = "Multi-return pipeline"
+tests = ["pipeline/valid/multi_return_pipeline.topo"]
+
+[[spec-06-pipeline.rules]]
+id = "06.4"
+description = "Cross-namespace fn block"
+tests = ["pipeline/valid/cross_namespace_fnblock.topo"]
+
+[[spec-06-pipeline.rules]]
+id = "06.5"
+description = "Pipeline cycle error"
+tests = ["pipeline/invalid/pipeline_cycle.topo"]
+
+[[spec-06-pipeline.rules]]
+id = "06.6"
+description = "Pipeline no terminal error"
+tests = ["pipeline/invalid/pipeline_no_terminal.topo"]
+
+[[spec-06-pipeline.rules]]
+id = "06.7"
+description = "Pipeline multiple terminals error"
+tests = ["pipeline/invalid/pipeline_multiple_terminals.topo"]
+
+[[spec-06-pipeline.rules]]
+id = "06.8"
+description = "Pipeline undeclared node error"
+tests = ["pipeline/invalid/pipeline_undeclared_node.topo"]
+
+[[spec-06-pipeline.rules]]
+id = "06.9"
+description = "Pipeline type mismatch error"
+tests = ["pipeline/invalid/pipeline_type_mismatch.topo"]
+
+[spec-11-classes]
+description = "Classes and templates"
+
+[[spec-11-classes.rules]]
+id = "11.1"
+description = "Basic class declaration"
+tests = ["classes/valid/basic_class.topo"]
+
+[[spec-11-classes.rules]]
+id = "11.2"
+description = "Class inheritance"
+tests = ["classes/valid/inheritance.topo"]
+
+[[spec-11-classes.rules]]
+id = "11.3"
+description = "Class template"
+tests = ["classes/valid/class_template.topo"]
+
+[[spec-11-classes.rules]]
+id = "11.4"
+description = "Constructor and destructor"
+tests = ["classes/valid/constructor_destructor.topo"]
+
+[[spec-11-classes.rules]]
+id = "11.5"
+description = "Static members"
+tests = ["classes/valid/static_members.topo"]
+
+[[spec-11-classes.rules]]
+id = "11.6"
+description = "Missing template argument error"
+tests = ["classes/invalid/class_missing_template_arg.topo"]
+
+[[spec-11-classes.rules]]
+id = "11.7"
+description = "Function template"
+tests = ["templates/valid/function_template.topo"]
+
+[[spec-11-classes.rules]]
+id = "11.8"
+description = "Constrained template"
+tests = ["templates/valid/constrained_template.topo"]
+
+[[spec-11-classes.rules]]
+id = "11.9"
+description = "Basic constraint"
+tests = ["templates/valid/basic_constraint.topo"]
+
+[[spec-11-classes.rules]]
+id = "11.10"
+description = "Partial specialization"
+tests = ["templates/valid/partial_specialization.topo"]
+
+[[spec-11-classes.rules]]
+id = "11.11"
+description = "Unknown constraint error"
+tests = ["templates/invalid/unknown_constraint.topo"]
+
+[[spec-11-classes.rules]]
+id = "11.12"
+description = "Duplicate template parameter error"
+tests = ["templates/invalid/duplicate_template_param.topo"]
+
+[[spec-11-classes.rules]]
+id = "11.13"
+description = "Template argument count mismatch error"
+tests = ["templates/invalid/template_arg_count.topo"]
+
+[[spec-11-classes.rules]]
+id = "11.14"
+description = "Constraint parent not found error"
+tests = ["templates/invalid/constraint_parent_not_found.topo"]
+
+[[spec-11-classes.rules]]
+id = "11.15"
+description = "Constraint conflict error"
+tests = ["templates/invalid/constraint_conflict.topo"]
+
+[[spec-11-classes.rules]]
+id = "11.16"
+description = "Circular constraint error"
+tests = ["templates/invalid/circular_constraint.topo"]

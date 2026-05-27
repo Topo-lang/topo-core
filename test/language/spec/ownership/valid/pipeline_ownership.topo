@@ -1,0 +1,10 @@
+// Ownership qualifiers in pipeline function parameters
+
+std::import("data.h", Data);
+std::import("config.h", Config);
+
+namespace pipeline {
+  public:
+    filter(shared Data d) -> (Data filtered, Config meta);
+    transform(owned Data d) -> (Data result, Config info);
+}

@@ -1,0 +1,14 @@
+// File header comment
+
+// Another header line
+
+namespace app {
+    public:
+        //render function
+        void render(); // inline comment
+        /* block comment */
+        void update();
+
+    protected:
+        void init();
+}

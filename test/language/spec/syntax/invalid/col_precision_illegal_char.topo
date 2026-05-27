@@ -1,0 +1,8 @@
+// TEST: column precision for illegal character
+// EXPECT-ERROR: unexpected character
+// EXPECT-LINE: 7
+// EXPECT-COL: 13
+namespace app {
+  public:
+    void run@();
+}

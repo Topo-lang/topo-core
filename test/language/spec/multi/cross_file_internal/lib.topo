@@ -1,0 +1,9 @@
+// Library with internal function in shared namespace
+
+namespace shared {
+  public:
+    void publicApi();
+
+  internal:
+    void secret();
+}

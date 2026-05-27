@@ -1,0 +1,8 @@
+// Stdlib bridging type — optional<T> (Plan 38 Batch 1)
+// Tests: generic stdlib type with arity 1 over a stdlib scalar.
+
+namespace lookup {
+  public:
+    optional<i64> findId(string name);
+    optional<f64> currentRate();
+}

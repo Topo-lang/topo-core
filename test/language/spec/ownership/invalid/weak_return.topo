@@ -1,0 +1,9 @@
+// S-OWN-003: weak as function return type is an error
+// EXPECT-ERROR: weak.*S-OWN-003
+
+std::import("widget.h", Widget);
+
+namespace test {
+  public:
+    weak Widget getParent();
+}

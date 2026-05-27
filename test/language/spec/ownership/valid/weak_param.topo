@@ -1,0 +1,8 @@
+// Weak parameter in function declaration
+
+std::import("particle.h", Particle);
+
+namespace physics {
+  public:
+    void observe(weak Particle p);
+}

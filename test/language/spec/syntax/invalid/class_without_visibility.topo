@@ -1,0 +1,10 @@
+// TEST: class members without visibility section should be rejected
+// EXPECT-ERROR: visibility
+
+namespace app {
+  public:
+    class Widget {
+      void render();
+      int width;
+    }
+}

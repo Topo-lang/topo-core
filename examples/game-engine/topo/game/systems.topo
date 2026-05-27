@@ -1,0 +1,93 @@
+// game/systems.topo — Game systems with comptime branching
+//
+// Showcases: selective import, comptime if choosing between
+// declaration sets, dual pipelines in one namespace, ownership
+// qualifiers, and priority spanning pipelines.
+
+using int = std::cpp17::int;
+using float = std::cpp17::float;
+using bool = std::cpp17::bool;
+
+import entity { Entity, Component, Tickable };
+
+namespace systems {
+
+  public:
+    type GameState {
+      public:
+        static GameState playing();
+        static GameState paused();
+        bool is_active() const;
+    }
+
+    type KeyBinding {
+      public:
+        explicit KeyBinding(int keycode, int action_id);
+    }
+
+    type AIAgent {
+      public:
+        explicit AIAgent(const Entity& owner);
+        void set_target(float x, float y, float z);
+    }
+
+  // ── Comptime: network vs local state management ─────────────
+  // Entire declaration groups switch based on a compile-time flag.
+
+  public:
+    comptime if (HAS_NETWORK) {
+      void sync_state(shared GameState state);
+      void rollback(int frame_id);
+      void predict(owned GameState state);
+    } else {
+      void save_state(owned GameState local);
+      load_state() -> GameState;
+    }
+
+  // ── Input pipeline (3-stage) ────────────────────────────────
+
+  public:
+    void poll();
+
+    fn poll {
+      stage<1> read_os_events() -> raw;
+      stage<2> translate_bindings(raw) -> mapped;
+      stage<3> update_input_state(mapped);
+    }
+
+  protected:
+    int read_os_events();
+    int translate_bindings(int raw_events);
+    void update_input_state(int mapped_events);
+    void register_binding(const KeyBinding& binding);
+
+  // ── AI pipeline (4-stage) ───────────────────────────────────
+
+  public:
+    priority(background):
+    void tick_ai();
+
+    fn tick_ai {
+      stage<1> evaluate_sensors() -> perception;
+      stage<2> run_behavior_trees(perception) -> decisions;
+      stage<3> plan_paths(decisions) -> movement;
+      stage<4> apply_ai_forces(movement);
+    }
+
+  protected:
+    int evaluate_sensors();
+    int run_behavior_trees(int perception);
+    int plan_paths(int decisions);
+    int apply_ai_forces(int movement);
+
+  // ── State transitions ───────────────────────────────────────
+
+  public:
+    priority(high):
+    void transition(owned GameState new_state);
+    GameState current_state();
+
+  private:
+    void on_enter(const GameState& state);
+    void on_exit(const GameState& state);
+}

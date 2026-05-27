@@ -1,0 +1,4 @@
+// TEST: unexpected token at top level
+// EXPECT-ERROR: expected
+
+42;

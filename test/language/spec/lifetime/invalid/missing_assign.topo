@@ -1,0 +1,9 @@
+// EXPECT-ERROR: expected '='
+using int = std::cpp17::int;
+
+namespace engine {
+  lifetime frame;
+
+  public:
+    void run();
+}

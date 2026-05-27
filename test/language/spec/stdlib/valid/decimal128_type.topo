@@ -1,0 +1,10 @@
+// Stdlib bridging type — decimal128: 16-byte IEEE 754-2008 value (raw
+// bytes), {16,16} layout. Scalar shape: no `<...>`. All 5 hosts surface
+// a raw 16-byte buffer (no codec). Exercised in parameter and return
+// position, including nested inside a record field.
+
+namespace money {
+  public:
+    decimal128 zero();
+    record<amount: decimal128, ccy: u32> quote(decimal128 spread);
+}

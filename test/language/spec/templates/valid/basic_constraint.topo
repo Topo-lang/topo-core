@@ -1,0 +1,25 @@
+// Constraint + adapt + instantiate
+
+using Int = std::cpp17::int;
+using Bool = std::cpp17::bool;
+
+namespace math {
+  public:
+    constraint Comparable {
+      Bool equal(T a, T b);
+    }
+
+    adapt Comparable for Int {
+      equal = int_equal;
+    }
+
+    Bool int_equal(Int a, Int b);
+
+    template<typename T : Comparable>
+    class Set {
+      public:
+        void insert(T value);
+    }
+
+    instantiate Set<Int>;
+}

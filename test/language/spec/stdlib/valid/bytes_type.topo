@@ -1,0 +1,9 @@
+// Stdlib bridging type — bytes (slice<u8>-isomorphic byte view).
+// Tests: scalar-shaped keyword, arity 0, no <...>; same 16B/align8
+// layout as slice<u8>.
+
+namespace io {
+  public:
+    bytes readAll();
+    i64 checksum(bytes payload);
+}

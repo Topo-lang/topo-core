@@ -1,0 +1,20 @@
+// Operator overload declarations
+// Tests BNF rule 08.6: operator_decl
+
+using Int = std::cpp17::int;
+using Bool = std::cpp17::bool;
+
+namespace math {
+  public:
+    class Complex {
+      public:
+        Int real;
+        Int imag;
+        fn operator+(Complex lhs, Complex rhs) -> Complex;
+        fn operator-(Complex lhs, Complex rhs) -> Complex;
+        fn operator*(Complex lhs, Complex rhs) -> Complex;
+        fn operator==(Complex lhs, Complex rhs) -> Bool;
+        fn operator!=(Complex lhs, Complex rhs) -> Bool;
+        fn operator<(Complex lhs, Complex rhs) -> Bool;
+    }
+}

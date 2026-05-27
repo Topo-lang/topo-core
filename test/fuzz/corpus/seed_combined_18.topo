@@ -1,0 +1,18 @@
+// Comptime + priority + stages
+using Int = std::cpp17::int;
+namespace engine {
+  public:
+    priority(critical):
+      void boot();
+    comptime if (true) {
+      priority(high):
+        void optional_init();
+    }
+    fn boot {
+      stage<1> hw_init();
+      stage<2> sw_init();
+    }
+  protected:
+    void hw_init();
+    void sw_init();
+}

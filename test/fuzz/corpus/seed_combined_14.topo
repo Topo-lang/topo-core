@@ -1,0 +1,19 @@
+// Pipeline DAG + lifetime
+using Int = std::cpp17::int;
+namespace pipe {
+  lifetime batch = start..finish;
+  public:
+    void run();
+    fn run {
+      start -> a;
+      start -> b;
+      a -> finish;
+      b -> finish;
+      finish -> void;
+    }
+  protected:
+    lifetime<batch, Int> start(Int n);
+    void a();
+    void b();
+    void finish();
+}

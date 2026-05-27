@@ -1,0 +1,17 @@
+// Constructor and destructor declarations
+
+using Int = std::cpp17::int32_t;
+
+namespace ui {
+  public:
+    class Button {
+      public:
+        Button();
+        Button(Int width, Int height);
+        ~Button();
+        void render() const;
+      private:
+        Int width;
+        Int height;
+    }
+}

@@ -1,0 +1,4 @@
+// Empty namespace — minimal valid structure
+
+namespace app {
+}

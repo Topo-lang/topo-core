@@ -1,0 +1,36 @@
+// Test fixture for constraint satisfaction verification
+
+using Int = std::cpp17::int;
+using Double = std::cpp17::double;
+using Bool = std::cpp17::bool;
+
+namespace math {
+
+  public:
+    constraint Comparable {
+        Bool equal(T a, T b);
+    }
+
+    constraint Numeric : Comparable {
+        T add(T a, T b);
+        T zero();
+    }
+
+    adapt Numeric for Int {
+        add = int_add;
+        zero = int_zero;
+        equal = int_equal;
+    }
+
+    Int int_add(Int a, Int b);
+    Int int_zero();
+    Bool int_equal(Int a, Int b);
+
+    template<typename T : Numeric>
+    class Container {
+        public:
+            void push(T value);
+    }
+
+    instantiate Container<Int>;
+}

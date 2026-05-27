@@ -1,0 +1,10 @@
+// TEST: fn block references undeclared function
+// EXPECT-ERROR: undeclared function
+
+namespace app {
+  public:
+    void run();
+    fn run {
+      stage<1> ghost();
+    }
+}

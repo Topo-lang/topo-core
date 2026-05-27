@@ -1,0 +1,8 @@
+// Shared parameter in function declaration
+
+std::import("particle.h", Particle);
+
+namespace physics {
+  public:
+    void render(shared Particle p);
+}

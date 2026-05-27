@@ -1,0 +1,6 @@
+// Multi-return with point selection (arrow syntax)
+using Int = std::cpp17::int;
+namespace math {
+  public:
+    divmod(Int a, Int b) -> (Int q, Int r);
+}

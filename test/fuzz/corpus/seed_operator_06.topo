@@ -1,0 +1,9 @@
+// Invalid: unknown operator symbol
+using int = std::cpp17::int;
+namespace err {
+  public:
+    class X {
+      public:
+        fn operator@(X a, X b) -> X;
+    }
+}

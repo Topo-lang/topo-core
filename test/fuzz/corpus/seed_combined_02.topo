@@ -1,0 +1,13 @@
+// Templates + comptime
+using Int = std::cpp17::int;
+namespace lib {
+  public:
+    template<typename T>
+    class Buffer {
+      public:
+        T get(Int idx);
+    }
+    comptime if (true) {
+      instantiate Buffer<Int>;
+    }
+}

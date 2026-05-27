@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Cancel in-flight runs on the same ref when a new push lands.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Build + test the foundation package ────────
+  # topo-core sits at the root of the topo dependency graph; no upstream
+  # topo-* package to install. CI exercises the standalone configure /
+  # build / ctest path used by every downstream repo's installer step.
+  build-and-test:
+    name: build + test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps (linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Install build deps (macos)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Export GHA cache env (for vcpkg x-gha backend)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+            core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          # Matches the `builtin-baseline` pinned in vcpkg.json. Bump both
+          # together when refreshing the vcpkg snapshot.
+          vcpkgGitCommitId: "56bb2411609227288b70117ead2c47585ba07713"
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --timeout 120
+
+      # Smoke test: install topo-core, then verify a downstream
+      # `find_package(topo-core)` resolves and links cleanly.
+      - name: Install topo-core
+        run: cmake --install build --prefix "${RUNNER_TEMP}/topo-install"
+
+      - name: find_package smoke
+        run: |
+          mkdir -p "${RUNNER_TEMP}/find-package-smoke"
+          cd "${RUNNER_TEMP}/find-package-smoke"
+          # The smoke project needs its own vcpkg manifest: topo-core's
+          # Config.cmake calls find_dependency(nlohmann_json), so the
+          # consumer must arrange for that transitive dep itself. Pinning
+          # the same builtin-baseline reuses the cached vcpkg build.
+          cat > vcpkg.json <<'JSON'
+          {
+            "name": "topo-core-find-package-smoke",
+            "version-string": "0.0.0",
+            "builtin-baseline": "56bb2411609227288b70117ead2c47585ba07713",
+            "dependencies": ["nlohmann-json"]
+          }
+          JSON
+          cat > CMakeLists.txt <<'CMAKE'
+          cmake_minimum_required(VERSION 3.20)
+          project(topo-core-find-package-smoke LANGUAGES CXX)
+          find_package(topo-core CONFIG REQUIRED)
+          add_executable(smoke smoke.cpp)
+          target_link_libraries(smoke PRIVATE topo::core::TopoPlatform)
+          CMAKE
+          cat > smoke.cpp <<'CPP'
+          #include <topo/Platform/Platform.h>
+          int main() {
+              // Sanity-check that the headers + library link cleanly.
+              return 0;
+          }
+          CPP
+          cmake -S . -B build -G Ninja \
+              -DCMAKE_PREFIX_PATH="${RUNNER_TEMP}/topo-install" \
+              -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+          cmake --build build
+          ./build/smoke

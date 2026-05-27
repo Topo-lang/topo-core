@@ -1,0 +1,19 @@
+// Plan 40 Phase 0 — multiple views including a sliced view expression.
+// Validates: multiple view declarations; field[start..end] form.
+
+std::import("cstdint", int32_t);
+
+namespace ranking {
+  public:
+    type Ranker {
+      public:
+        int32_t data;
+        int32_t nActive;
+    }
+}
+
+debug Ranker {
+  view rank_current from data[0..1024];
+  view rank_total from data;
+  summary "Ranker active region";
+}

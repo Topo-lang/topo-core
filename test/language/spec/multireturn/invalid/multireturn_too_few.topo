@@ -1,0 +1,9 @@
+// TEST: multi-return with fewer than 2 return parameters
+// EXPECT-ERROR: at least 2
+
+using int = std::cpp17::int;
+
+namespace app {
+  public:
+    compute() -> (int only);
+}

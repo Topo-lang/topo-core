@@ -1,0 +1,4 @@
+namespace a::b::c::d::e::f {
+  public:
+    void deep();
+}

@@ -1,0 +1,10 @@
+// TEST: bool<i64> — scalar stdlib type with spurious template args.
+// The parser's template-arg guard rejects `<` after a scalar stdlib
+// keyword, so the resulting failure surfaces as a parse error rather
+// than a Sema-level arity error. Either failure mode is acceptable —
+// both produce a non-zero exit code via WILL_FAIL.
+
+namespace bad {
+  public:
+    bool<i64> bad();
+}

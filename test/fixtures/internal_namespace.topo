@@ -1,0 +1,11 @@
+// Test: internal namespace — all members become internal
+internal namespace detail {
+    public:
+        void helper();
+        void secret();
+}
+
+namespace api {
+    public:
+        void serve();
+}

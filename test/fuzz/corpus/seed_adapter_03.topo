@@ -1,0 +1,13 @@
+using Int = std::cpp17::int;
+using Double = std::cpp17::double;
+namespace math {
+  public:
+    constraint Numeric : Comparable {
+      T add(T a, T b);
+      T zero();
+    }
+    constraint Comparable {
+      Bool equal(T a, T b);
+    }
+    using Bool = std::cpp17::bool;
+}

@@ -1,0 +1,15 @@
+// TEST: stage numbers must be non-decreasing
+// EXPECT-ERROR: stage.*less than previous
+
+namespace app {
+  public:
+    void run();
+    fn run {
+      stage<2> a();
+      stage<1> b();
+    }
+
+  protected:
+    void a();
+    void b();
+}

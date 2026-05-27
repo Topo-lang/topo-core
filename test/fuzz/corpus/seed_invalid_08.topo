@@ -1,0 +1,5 @@
+namespace n {
+  public:
+    void f();
+  @@@@
+}

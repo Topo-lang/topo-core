@@ -1,0 +1,9 @@
+// Nested empty namespaces
+namespace a {
+  namespace b {
+    namespace c {
+    }
+  }
+  namespace d {
+  }
+}

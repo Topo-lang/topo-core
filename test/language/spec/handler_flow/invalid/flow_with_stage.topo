@@ -1,0 +1,14 @@
+// TEST: a flow body is a DAG of edges only — explicit stage<N> is not
+// allowed (stages are inferred from the DAG topology).
+// EXPECT-ERROR: explicit stage<N> is incompatible with pipeline mode
+
+namespace bad {
+  public:
+    handler a(i64 x) -> i64;
+    handler b(i64 x) -> i64;
+
+    flow f {
+      stage<1> a();
+      a -> b;
+    }
+}

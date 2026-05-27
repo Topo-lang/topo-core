@@ -1,0 +1,338 @@
+# Spec Rule -> Test File Traceability Matrix
+#
+# Maps BNF rules and semantic constraints from spec/07-13 to test files
+# under topo-core/test/language/spec/.
+#
+# Format: "rule_name" = ["test/path1.topo", ...]
+# Empty array [] = rule not yet covered by tests.
+#
+# Run: python3 scripts/check-spec-coverage.py
+
+# ============================================================================
+# spec/07 — Lexical Syntax
+# ============================================================================
+[syntax]
+
+# 07 Section 1: Comments
+"07.1_line_comment"         = ["spec/syntax/valid/comments_everywhere.topo"]
+"07.1_block_comment"        = ["spec/syntax/valid/comments_everywhere.topo"]
+"07.1_unterminated_block"   = ["spec/syntax/invalid/unterminated_block_comment.topo"]
+
+# 07 Section 2: Identifiers
+"07.2_identifier"           = ["spec/syntax/valid/nested_namespace.topo"]
+"07.2_qualified_name"       = ["spec/declarations/valid/std_import.topo"]
+"07.2_dotted_name"          = ["spec/stages/valid/cross_namespace_operation.topo"]
+"07.2_context_keyword_lifetime" = ["spec/lifetime/valid/basic_lifetime.topo"]
+
+# 07 Section 3: Keywords
+"07.3_core_keywords"        = ["spec/syntax/valid/empty_namespace.topo"]
+"07.3_deprecated_class"     = ["spec/classes/valid/basic_class.topo"]
+"07.3_forbidden_virtual"    = ["spec/syntax/invalid/forbidden_virtual.topo"]
+
+# 07 Section 4: Literals
+"07.4_integer_literal"      = ["spec/hints/valid/basic_hints.topo"]
+"07.4_boolean_literal"      = ["spec/syntax/valid/boolean_literal.topo"]
+"07.4_string_literal"       = ["spec/declarations/valid/std_import.topo", "spec/syntax/invalid/unterminated_string.topo"]
+
+# 07 Section 5: Operators & Delimiters
+"07.5_arrow"                = ["spec/pipeline/valid/basic_linear.topo"]
+"07.5_fat_arrow"            = ["spec/pipeline/valid/fat_arrow_pipeline.topo"]
+"07.5_scope_op"             = ["spec/declarations/valid/std_import.topo"]
+"07.5_dot_op"               = ["spec/stages/valid/cross_namespace_operation.topo"]
+"07.5_dotdot_op"            = ["spec/lifetime/valid/basic_lifetime.topo"]
+"07.5_ellipsis"             = ["spec/templates/valid/ellipsis_variadic.topo"]
+"07.5_semicolon"            = ["spec/syntax/invalid/missing_semicolon.topo"]
+
+# 07 Section 6: File Import
+"07.6_file_import"          = ["spec/declarations/valid/file_import.topo", "spec/multi/cross_file_valid_import/caller.topo"]
+
+# 07 General syntax errors
+"07.err_illegal_character"     = ["spec/syntax/invalid/illegal_character.topo"]
+"07.err_unexpected_token"      = ["spec/syntax/invalid/unexpected_token.topo"]
+"07.err_missing_rparen"        = ["spec/syntax/invalid/missing_rparen.topo"]
+"07.err_empty_namespace"       = ["spec/syntax/invalid/empty_namespace.topo"]
+"07.err_unclosed_namespace"    = ["spec/syntax/invalid/unclosed_namespace.topo"]
+
+# ============================================================================
+# spec/08 — Declarations & Types
+# ============================================================================
+[declarations]
+
+# 08 Section 2: Top-level structure
+"08.2_topo_file"            = ["spec/syntax/valid/empty_namespace.topo"]
+
+# 08 Section 3: Namespace
+"08.3_namespace_decl"       = ["spec/syntax/valid/empty_namespace.topo", "spec/syntax/valid/nested_namespace.topo"]
+"08.3_namespace_path"       = ["spec/syntax/valid/nested_namespace.topo"]
+
+# 08 Section 4: Visibility sections
+"08.4_visibility_section"   = ["spec/visibility/valid/visibility_all_levels.topo"]
+"08.4_priority_subsection"  = ["spec/priority/valid/basic_priority.topo"]
+"08.4_bad_priority"         = ["spec/priority/invalid/bad_priority_level.topo"]
+
+# 08 Section 5: Data declarations
+"08.5_type_alias"           = ["spec/declarations/valid/using_alias.topo"]
+"08.5_std_import"           = ["spec/declarations/valid/std_import.topo"]
+"08.5_member_var"           = ["spec/classes/valid/static_members.topo"]
+"08.5_lifetime_decl"        = ["spec/lifetime/valid/basic_lifetime.topo", "spec/lifetime/valid/inline_range.topo", "spec/lifetime/valid/open_ended.topo", "spec/lifetime/valid/single_func.topo"]
+"08.5_lifetime_invalid"     = ["spec/lifetime/invalid/missing_assign.topo", "spec/lifetime/invalid/missing_semicolon.topo"]
+"08.5_instantiate_decl"     = ["spec/templates/valid/instantiate_decl.topo", "spec/templates/valid/basic_constraint.topo"]
+
+# 08 Section 6: Function declarations
+"08.6_function_decl_prefix" = ["spec/declarations/valid/minimal_function.topo"]
+"08.6_function_decl_suffix" = ["spec/multireturn/valid/basic_multireturn.topo"]
+"08.6_multi_return"         = ["spec/multireturn/valid/basic_multireturn.topo"]
+"08.6_multi_return_invalid" = ["spec/multireturn/invalid/multireturn_duplicate_param.topo", "spec/multireturn/invalid/multireturn_too_few.topo", "spec/multireturn/invalid/too_many_returns.topo"]
+"08.6_with_returns"         = ["spec/multireturn/valid/basic_with_returns.topo", "spec/multireturn/valid/with_returns_all_fields.topo", "spec/multireturn/valid/with_returns_all_underscore.topo"]
+"08.6_with_returns_invalid" = ["spec/multireturn/invalid/with_returns_unknown_name.topo", "spec/multireturn/invalid/with_returns_duplicate.topo", "spec/multireturn/invalid/with_returns_too_many.topo", "spec/multireturn/invalid/with_returns_empty.topo"]
+"08.6_parameter_list"       = ["spec/declarations/valid/minimal_function.topo"]
+"08.6_const_member"         = []
+"08.6_operator_decl"        = ["spec/classes/valid/operator_decl.topo", "spec/classes/valid/operator_overload.topo", "spec/classes/valid/operator_binding.topo"]
+"08.6_constructor_decl"     = ["spec/classes/valid/constructor_destructor.topo"]
+"08.6_destructor_decl"      = ["spec/classes/valid/constructor_destructor.topo"]
+"08.6_comptime_fn"          = ["spec/declarations/valid/comptime_fn.topo"]
+"08.6_static_function"      = ["spec/classes/valid/static_members.topo"]
+
+# 08 Section 7: Function logic blocks
+"08.7_fn_logic_block"       = ["spec/stages/valid/fn_block_basic.topo"]
+"08.7_fn_block_dotted"      = ["spec/stages/valid/cross_namespace_operation.topo", "spec/pipeline/valid/cross_namespace_fnblock.topo"]
+
+# 08 Section 7a: handler / flow logic-unit vocabulary
+"08.7a_handler_decl"        = ["spec/handler_flow/valid/handler_chain.topo", "spec/handler_flow/valid/handler_source.topo"]
+"08.7a_flow_decl"           = ["spec/handler_flow/valid/handler_chain.topo", "spec/handler_flow/valid/flow_parallel_branches.topo", "spec/handler_flow/invalid/flow_record_width_mismatch.topo"]
+"08.7a_handler_single_in"   = ["spec/handler_flow/invalid/handler_multi_input.topo"]
+"08.7a_flow_edges_only"     = ["spec/handler_flow/invalid/flow_with_stage.topo"]
+
+# 08 Section 8: Type declarations
+"08.8_type_decl"            = ["spec/classes/valid/basic_class.topo"]
+"08.8_inheritance"          = ["spec/classes/valid/inheritance.topo"]
+"08.8_constraint_decl"      = ["spec/templates/valid/basic_constraint.topo"]
+"08.8_adapt_decl"           = ["spec/declarations/valid/adapt_decl.topo", "spec/templates/valid/basic_constraint.topo", "spec/declarations/valid/type_adapter.topo"]
+"08.8_typefn_decl"          = ["spec/declarations/valid/typefn_decl.topo"]
+
+# 08 Section 9: Template declarations
+"08.9_template_prefix"      = ["spec/templates/valid/function_template.topo"]
+"08.9_template_param"       = ["spec/templates/valid/function_template.topo"]
+"08.9_constrained_param"    = ["spec/templates/valid/constrained_template.topo"]
+"08.9_template_type"        = ["spec/classes/valid/class_template.topo"]
+"08.9_partial_spec"         = ["spec/templates/valid/partial_specialization.topo"]
+"08.9_variadic_template"    = ["spec/templates/valid/variadic_template.topo"]
+
+# 08 Section 10: Conditional declarations
+"08.10_comptime_if"         = ["spec/declarations/valid/comptime_if.topo"]
+
+# 08 Section 11: Type system
+"08.11_void_type"           = ["spec/declarations/valid/minimal_function.topo"]
+"08.11_reserved_int"        = ["spec/declarations/invalid/bare_int_without_using.topo"]
+"08.11_ownership_owned"     = ["spec/ownership/valid/owned_param.topo", "spec/ownership/valid/owned_return.topo"]
+"08.11_ownership_shared"    = ["spec/ownership/valid/shared_param.topo", "spec/ownership/valid/const_shared.topo"]
+"08.11_ownership_weak"      = ["spec/ownership/valid/weak_param.topo"]
+"08.11_ownership_invalid"   = ["spec/ownership/invalid/owned_primitive.topo", "spec/ownership/invalid/owned_with_ptr.topo", "spec/ownership/invalid/owned_with_ref.topo", "spec/ownership/invalid/shared_cycle.topo", "spec/ownership/invalid/weak_return.topo"]
+
+# 08 Type errors
+"08.err_unknown_type"       = ["spec/declarations/invalid/unknown_type.topo"]
+"08.err_invalid_return"     = ["spec/declarations/invalid/invalid_return_type.topo"]
+"08.err_duplicate_function" = ["spec/declarations/invalid/duplicate_function.topo"]
+
+# 08 Stdlib bridging types — lowercase reserved keywords
+"08.stdlib_bool"            = ["spec/stdlib/valid/bool_type.topo", "spec/stdlib/valid/all_six_types.topo", "spec/stdlib/valid/all_fifteen_types.topo"]
+"08.stdlib_i64"             = ["spec/stdlib/valid/i64_type.topo", "spec/stdlib/valid/all_six_types.topo", "spec/stdlib/valid/all_fifteen_types.topo"]
+"08.stdlib_f64"             = ["spec/stdlib/valid/f64_type.topo", "spec/stdlib/valid/all_six_types.topo", "spec/stdlib/valid/all_fifteen_types.topo"]
+"08.stdlib_string"          = ["spec/stdlib/valid/string_type.topo", "spec/stdlib/valid/all_six_types.topo", "spec/stdlib/valid/all_fifteen_types.topo"]
+"08.stdlib_optional"        = ["spec/stdlib/valid/optional_type.topo", "spec/stdlib/valid/all_six_types.topo", "spec/stdlib/valid/all_fifteen_types.topo"]
+"08.stdlib_slice"           = ["spec/stdlib/valid/slice_type.topo", "spec/stdlib/valid/all_six_types.topo", "spec/stdlib/valid/all_fifteen_types.topo"]
+"08.stdlib_arity_invalid"   = ["spec/stdlib/invalid/optional_missing_t.topo", "spec/stdlib/invalid/optional_too_many_args.topo", "spec/stdlib/invalid/bool_with_template_arg.topo"]
+"08.stdlib_inner_invalid"   = ["spec/stdlib/invalid/slice_unknown_t.topo"]
+
+# 08 Stdlib width-extension scalar keywords — "扩条目而非扩路径"
+"08.stdlib_u8"              = ["spec/stdlib/valid/u8_type.topo", "spec/stdlib/valid/all_fifteen_types.topo"]
+"08.stdlib_i32"             = ["spec/stdlib/valid/i32_type.topo", "spec/stdlib/valid/all_fifteen_types.topo"]
+"08.stdlib_u32"             = ["spec/stdlib/valid/u32_type.topo", "spec/stdlib/valid/all_fifteen_types.topo"]
+"08.stdlib_u64"             = ["spec/stdlib/valid/u64_type.topo", "spec/stdlib/valid/all_fifteen_types.topo"]
+"08.stdlib_f32"             = ["spec/stdlib/valid/f32_type.topo", "spec/stdlib/valid/all_fifteen_types.topo"]
+"08.stdlib_i8"              = ["spec/stdlib/valid/i8_type.topo", "spec/stdlib/valid/all_fifteen_types.topo"]
+"08.stdlib_i16"             = ["spec/stdlib/valid/i16_type.topo", "spec/stdlib/valid/all_fifteen_types.topo"]
+"08.stdlib_u16"             = ["spec/stdlib/valid/u16_type.topo", "spec/stdlib/valid/all_fifteen_types.topo"]
+"08.stdlib_bytes"           = ["spec/stdlib/valid/bytes_type.topo", "spec/stdlib/valid/all_fifteen_types.topo"]
+"08.stdlib_time_ns"         = ["spec/stdlib/valid/time_ns_type.topo"]
+"08.stdlib_time_ns_invalid" = ["spec/stdlib/invalid/time_ns_with_template_arg.topo"]
+"08.stdlib_uuid"            = ["spec/stdlib/valid/uuid_type.topo"]
+"08.stdlib_uuid_invalid"    = ["spec/stdlib/invalid/uuid_with_template_arg.topo"]
+"08.stdlib_decimal128"      = ["spec/stdlib/valid/decimal128_type.topo"]
+"08.stdlib_decimal128_invalid" = ["spec/stdlib/invalid/decimal128_with_template_arg.topo"]
+
+# 08 Stdlib composite — array<T, N> fixed inline buffer (T + integer N, caller-computes)
+"08.stdlib_array"           = ["spec/stdlib/valid/array_type.topo"]
+"08.stdlib_array_invalid"   = ["spec/stdlib/invalid/array_zero_n.topo", "spec/stdlib/invalid/array_non_int_n.topo", "spec/stdlib/invalid/array_bad_inner.topo"]
+
+# 08 Stdlib composite — record<...> named-field aggregate (natural alignment
+# + explicit padding field, no `align` keyword)
+"08.stdlib_record"          = ["spec/stdlib/valid/record_type.topo", "spec/stdlib/valid/record_explicit_padding.topo"]
+"08.stdlib_record_invalid"  = ["spec/stdlib/invalid/record_user_type_field.topo", "spec/stdlib/invalid/record_duplicate_field.topo", "spec/stdlib/invalid/record_empty.topo"]
+
+# 08 Stdlib composite — union<...> tagged union (tag-first integer scalar;
+# variants share storage = max(sizeof variant), so size != field sum; no
+# `align` keyword)
+"08.stdlib_union"           = ["spec/stdlib/valid/union_type.topo"]
+"08.stdlib_union_invalid"   = ["spec/stdlib/invalid/union_no_variant.topo", "spec/stdlib/invalid/union_dup_field.topo", "spec/stdlib/invalid/union_bad_field.topo", "spec/stdlib/invalid/union_non_int_tag.topo"]
+
+# ============================================================================
+# spec/09 — Logic Blocks & Stages
+# ============================================================================
+[stages]
+
+# 09 Section 1: FnLogicBlock
+"09.1_fn_block_operation"   = ["spec/stages/valid/fn_block_basic.topo"]
+"09.1_fn_block_pipeline"    = ["spec/pipeline/valid/basic_linear.topo"]
+
+# 09 Section 2: Operations
+"09.2_stage_specifier"      = ["spec/stages/valid/monotonic_stages.topo"]
+"09.2_function_call"        = ["spec/stages/valid/fn_block_basic.topo"]
+"09.2_return_binding"       = ["spec/multireturn/valid/basic_multireturn.topo"]
+"09.2_variable_assignment"  = ["spec/stages/valid/variable_assignment.topo"]
+"09.2_discard_binding"      = ["spec/stages/valid/discard_binding.topo"]
+
+# 09 Section 3: Pipeline mode
+"09.3_pipeline_edge"        = ["spec/pipeline/valid/basic_linear.topo"]
+"09.3_pipeline_terminal"    = ["spec/pipeline/valid/basic_linear.topo"]
+"09.3_pipeline_diamond"     = ["spec/pipeline/valid/diamond_dag.topo"]
+"09.3_pipeline_multi_return"= ["spec/pipeline/valid/multi_return_pipeline.topo"]
+
+# 09 Section 4: Stage semantics
+"09.4_stage_monotonic"      = ["spec/stages/valid/monotonic_stages.topo"]
+"09.4_auto_stage"           = ["spec/stages/valid/auto_stage_assignment.topo"]
+"09.4_parallel_same_stage"  = ["spec/stages/valid/parallel_same_stage.topo"]
+
+# 09 Section 7: Error codes
+"09.S001_undeclared_op"     = ["spec/stages/invalid/undeclared_operation.topo"]
+"09.S003_non_monotonic"     = ["spec/stages/invalid/stage_monotonicity.topo"]
+"09.S008_negative_stage"    = ["spec/stages/invalid/stage_negative_number.topo"]
+"09.S006_pipeline_cycle"    = ["spec/pipeline/invalid/pipeline_cycle.topo"]
+"09.S007_no_terminal"       = ["spec/pipeline/invalid/pipeline_no_terminal.topo"]
+"09.S007_multi_terminal"    = ["spec/pipeline/invalid/pipeline_multiple_terminals.topo"]
+"09.err_duplicate_fn_block" = ["spec/stages/invalid/duplicate_fn_block.topo"]
+"09.err_orphan_fn_block"    = ["spec/stages/invalid/orphan_fn_block.topo"]
+"09.err_unclosed_fn_block"  = ["spec/stages/invalid/unclosed_fn_block.topo"]
+"09.err_stage_dup_name"     = ["spec/stages/invalid/stage_duplicate_name.topo"]
+"09.err_cross_ns_undeclared"= ["spec/stages/invalid/cross_namespace_undeclared.topo"]
+"09.err_type_mismatch"      = ["spec/pipeline/invalid/pipeline_type_mismatch.topo"]
+"09.err_undeclared_node"    = ["spec/pipeline/invalid/pipeline_undeclared_node.topo"]
+
+# ============================================================================
+# spec/10 — Visibility Semantics
+# ============================================================================
+[visibility]
+
+"10.1_public"               = ["spec/visibility/valid/visibility_all_levels.topo"]
+"10.1_protected_default"    = ["spec/visibility/valid/visibility_all_levels.topo"]
+"10.1_private"              = ["spec/visibility/valid/visibility_all_levels.topo"]
+"10.1_internal"             = ["spec/visibility/valid/internal_section.topo", "spec/visibility/valid/internal_namespace.topo"]
+"10.err_duplicate_vis"      = ["spec/visibility/invalid/duplicate_visibility.topo"]
+"10.err_internal_override"  = ["spec/visibility/invalid/internal_override.topo"]
+"10.cross_file_internal"    = ["spec/multi/cross_file_internal/caller.topo"]
+"10.cross_file_import"      = ["spec/multi/cross_file_valid_import/caller.topo"]
+"10.missing_symbol"         = ["spec/multi/missing_symbol/main.topo"]
+
+# ============================================================================
+# spec/11 — Classes & Templates
+# ============================================================================
+[classes]
+
+"11.type_basic"             = ["spec/classes/valid/basic_class.topo"]
+"11.type_template"          = ["spec/classes/valid/class_template.topo"]
+"11.type_inheritance"       = ["spec/classes/valid/inheritance.topo"]
+"11.type_constructor"       = ["spec/classes/valid/constructor_destructor.topo"]
+"11.type_static_members"    = ["spec/classes/valid/static_members.topo"]
+"11.err_missing_template_arg" = ["spec/classes/invalid/class_missing_template_arg.topo"]
+
+[templates]
+
+"11.function_template"      = ["spec/templates/valid/function_template.topo"]
+"11.basic_constraint"       = ["spec/templates/valid/basic_constraint.topo"]
+"11.constrained_template"   = ["spec/templates/valid/constrained_template.topo"]
+"11.partial_specialization" = ["spec/templates/valid/partial_specialization.topo"]
+"11.err_circular_constraint"    = ["spec/templates/invalid/circular_constraint.topo"]
+"11.err_constraint_conflict"    = ["spec/templates/invalid/constraint_conflict.topo"]
+"11.err_constraint_parent"      = ["spec/templates/invalid/constraint_parent_not_found.topo"]
+"11.err_duplicate_param"        = ["spec/templates/invalid/duplicate_template_param.topo"]
+"11.err_template_arg_count"     = ["spec/templates/invalid/template_arg_count.topo"]
+"11.err_unknown_constraint"     = ["spec/templates/invalid/unknown_constraint.topo"]
+
+# ============================================================================
+# spec/12 — Lifetime Scoping
+# ============================================================================
+[lifetime]
+
+"12.lifetime_range"         = ["spec/lifetime/valid/basic_lifetime.topo"]
+"12.lifetime_open_ended"    = ["spec/lifetime/valid/open_ended.topo"]
+"12.lifetime_single_func"   = ["spec/lifetime/valid/single_func.topo"]
+"12.lifetime_inline_range"  = ["spec/lifetime/valid/inline_range.topo"]
+"12.err_missing_assign"     = ["spec/lifetime/invalid/missing_assign.topo"]
+"12.err_missing_semicolon"  = ["spec/lifetime/invalid/missing_semicolon.topo"]
+
+# ============================================================================
+# spec/13 — Loop Parallelization (IR-level, no syntax-level tests)
+# ============================================================================
+[loop_parallel]
+
+"13.config_enabled"         = []  # IR-level only: loop_parallel config tested via LoopParallelizePassTest (tier2)
+
+# ============================================================================
+# Data-Aware Hints (no spec number, feature-level)
+# ============================================================================
+[hints]
+
+"hints.cardinality"         = ["spec/hints/valid/basic_hints.topo"]
+"hints.access_mode"         = ["spec/hints/valid/basic_hints.topo"]
+"hints.err_bad_cardinality" = ["spec/hints/invalid/bad_cardinality.topo"]
+"hints.err_unknown_access"  = ["spec/hints/invalid/unknown_access.topo"]
+"hints.err_tiled_no_size"   = ["spec/hints/invalid/tiled_no_size.topo"]
+
+# ============================================================================
+# Ownership (spec/10 Section 3)
+# ============================================================================
+[ownership]
+
+"10.3_owned_param"          = ["spec/ownership/valid/owned_param.topo"]
+"10.3_owned_return"         = ["spec/ownership/valid/owned_return.topo"]
+"10.3_shared_param"         = ["spec/ownership/valid/shared_param.topo"]
+"10.3_const_shared"         = ["spec/ownership/valid/const_shared.topo"]
+"10.3_weak_param"           = ["spec/ownership/valid/weak_param.topo"]
+"10.3_class_owned_member"   = ["spec/ownership/valid/class_owned_member.topo"]
+"10.3_pipeline_ownership"   = ["spec/ownership/valid/pipeline_ownership.topo"]
+"10.3_template_owned"       = ["spec/ownership/valid/template_owned.topo"]
+"10.3_err_owned_primitive"  = ["spec/ownership/invalid/owned_primitive.topo"]
+"10.3_err_owned_with_ptr"   = ["spec/ownership/invalid/owned_with_ptr.topo"]
+"10.3_err_owned_with_ref"   = ["spec/ownership/invalid/owned_with_ref.topo"]
+"10.3_err_shared_cycle"     = ["spec/ownership/invalid/shared_cycle.topo"]
+"10.3_err_weak_return"      = ["spec/ownership/invalid/weak_return.topo"]
+
+# ============================================================================
+# Containment (external modifier)
+# ============================================================================
+[containment]
+
+"08.6_external_fn"              = ["spec/containment/valid/basic_external.topo"]
+"08.6_external_multiple"        = ["spec/containment/valid/external_multiple.topo"]
+"08.6_external_comptime_mutual" = ["spec/containment/invalid/external_comptime_conflict.topo"]
+
+
+# ============================================================================
+# Debug declarations (Plan 40 Phase 0)
+# `debug T { view ... summary ... inactive_region ... render ... }` produces
+# metadata only — zero codegen impact. See
+# `.aidesk/live/30-planning/40-topo-debug-profile-core.md` §2.1.
+# ============================================================================
+[debug]
+
+"40.2.1_debug_decl"               = ["spec/debug/valid/basic_view_and_summary.topo"]
+"40.2.1_view_decl_bare"           = ["spec/debug/valid/basic_view_and_summary.topo"]
+"40.2.1_view_decl_sliced"         = ["spec/debug/valid/multi_view_with_slice.topo"]
+"40.2.1_summary_decl"             = ["spec/debug/valid/basic_view_and_summary.topo"]
+"40.2.1_inactive_decl"            = ["spec/debug/valid/inactive_region_grayed.topo"]
+"40.2.1_err_unknown_target"       = ["spec/debug/invalid/unknown_target.topo"]
+"40.2.1_err_malformed_slice"      = ["spec/debug/invalid/malformed_slice.topo"]
+"40.2.1_err_missing_semicolon"    = ["spec/debug/invalid/missing_semicolon.topo"]
+# `<RenderDeclRaw>` parses but web-rendering semantics are unimplemented;
+# SemanticAnalyzer explicitly rejects it (no-silent-degradation).
+"40.2.1_err_render_unimplemented" = ["spec/debug/invalid/render_unimplemented.topo"]

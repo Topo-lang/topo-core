@@ -1,0 +1,7 @@
+// TEST: unknown type name
+// EXPECT-ERROR: unknown.*type|invalid.*type
+
+namespace app {
+  public:
+    NonExistentType compute();
+}

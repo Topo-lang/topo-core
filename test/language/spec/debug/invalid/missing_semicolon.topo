@@ -1,0 +1,17 @@
+// TEST: every debug body item must terminate with ';'.
+// EXPECT-ERROR: expected ';' after view declaration
+
+std::import("cstdint", int32_t);
+
+namespace svc {
+  public:
+    type Box {
+      public:
+        int32_t cells;
+    }
+}
+
+debug Box {
+  view live from cells
+  summary "missing semicolon above";
+}

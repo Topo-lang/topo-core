@@ -1,0 +1,7 @@
+using Uint = std::cpp17::uint32_t;
+using Str = std::cpp17::string;
+namespace data {
+  public:
+    void parse(Str input);
+    Uint hash(Str key);
+}

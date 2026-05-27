@@ -1,0 +1,17 @@
+// Mixed: nested namespaces + classes + templates
+using Int = std::cpp17::int;
+namespace lib::core {
+  public:
+    template<typename T>
+    class Container {
+      public:
+        class Iterator {
+          public:
+            T current() const;
+            void next();
+        }
+        Iterator begin();
+        Int size() const;
+    }
+    instantiate Container<Int>;
+}

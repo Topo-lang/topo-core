@@ -1,0 +1,11 @@
+// Operator with template class
+using int = std::cpp17::int;
+namespace gen {
+  public:
+    template<typename T>
+    class Wrapper {
+      public:
+        T val;
+        fn operator+(Wrapper a, Wrapper b) -> Wrapper;
+    }
+}

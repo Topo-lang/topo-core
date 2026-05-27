@@ -1,0 +1,7 @@
+// TEST: missing closing parenthesis
+// EXPECT-ERROR: expected
+
+namespace app {
+  public:
+    void run(;
+}

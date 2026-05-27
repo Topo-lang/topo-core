@@ -1,0 +1,11 @@
+// Fat arrow (=>) operator overload declaration
+
+using Int = std::cpp17::int32_t;
+
+namespace transform {
+  public:
+    class Mapper {
+      public:
+        fn operator=>(Mapper lhs, Mapper rhs) -> Mapper;
+    }
+}

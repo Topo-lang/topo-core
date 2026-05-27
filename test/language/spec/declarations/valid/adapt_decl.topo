@@ -1,0 +1,29 @@
+// Type adapter declaration via adapt keyword
+// Tests BNF rule 08.8: adapt_decl
+
+using Int = std::cpp17::int;
+using Bool = std::cpp17::bool;
+using Double = std::cpp17::double;
+
+namespace math {
+  public:
+    constraint Numeric {
+      Int add(T a, T b);
+      Bool equal(T a, T b);
+    }
+
+    adapt Numeric for Int {
+      add = int_add;
+      equal = int_equal;
+    }
+
+    adapt Numeric for Double {
+      add = double_add;
+      equal = double_equal;
+    }
+
+    Int int_add(Int a, Int b);
+    Bool int_equal(Int a, Int b);
+    Double double_add(Double a, Double b);
+    Bool double_equal(Double a, Double b);
+}

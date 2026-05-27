@@ -1,0 +1,16 @@
+// TEST: pipeline with cycle
+// EXPECT-ERROR: cycle
+
+namespace app {
+  public:
+    void run();
+    fn run {
+      a -> b;
+      b -> a;
+      a -> void;
+    }
+
+  protected:
+    void a();
+    void b();
+}

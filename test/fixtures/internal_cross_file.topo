@@ -1,0 +1,11 @@
+// Test: cross-file reference to internal function (should produce error)
+// This file imports internal_basic.topo and tries to call its internal functions.
+import internal_basic;
+
+namespace caller {
+    public:
+        void doWork();
+        fn doWork {
+            init();
+        }
+}

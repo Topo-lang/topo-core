@@ -1,0 +1,6 @@
+// TEST: `debug X { ... }` must reject targets that are not declared types.
+// EXPECT-ERROR: unknown debug target 'NoSuchType'
+
+debug NoSuchType {
+  summary "should not resolve";
+}

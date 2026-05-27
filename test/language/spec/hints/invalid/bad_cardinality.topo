@@ -1,0 +1,6 @@
+// EXPECT-ERROR: min \(100000\) > max \(100\)
+namespace engine::data {
+    public:
+        // min > max is invalid
+        process() -> void, cardinality(100k..100);
+}

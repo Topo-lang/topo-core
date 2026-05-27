@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- Plan 45 WP45b — speedscope vendor placeholder.
+
+  STUB. The real file is speedscope's single-file `index.html` build
+  (~1 MB, MIT) which renders a flamegraph from a profile passed via the
+  `?profileURL=` query parameter or postMessage. This placeholder is a
+  self-contained page that displays the requested profile URL and a
+  diagnostic so the iframe-embed wiring (the SPA points an <iframe> at
+  /vendor/speedscope.html) is exercised without the real bundle.
+
+  Replace with the upstream single-file build (see README.md) to render
+  real flamegraphs. The server reads this at request time so no rebuild
+  is needed after the swap. -->
+<html lang=en>
+<head><meta charset=utf-8><title>speedscope (placeholder)</title>
+<style>
+  body{font:13px/1.5 ui-monospace,Menlo,monospace;background:#1c1f23;
+       color:#e8eaed;margin:0;padding:24px}
+  .box{border:1px dashed #4a4f57;border-radius:6px;padding:20px}
+  code{color:#8ab4f8;word-break:break-all}
+</style></head>
+<body>
+<div class=box>
+  <h2>speedscope placeholder</h2>
+  <p>This is a stub. Drop the real single-file speedscope build at
+     <code>topo-core/lib/Debug/Server/vendor/speedscope.html</code>
+     to render flamegraphs (see <code>README.md</code>).</p>
+  <p>Requested profile: <code id=u>(none)</code></p>
+</div>
+<script>
+  try {
+    var p = new URLSearchParams(location.search).get('profileURL');
+    if (p) document.getElementById('u').textContent = p;
+  } catch (e) {}
+  if (console && console.warn) {
+    console.warn('[topo-debug] speedscope.html is a placeholder. See ' +
+                 'topo-core/lib/Debug/Server/vendor/README.md');
+  }
+</script>
+</body>
+</html>

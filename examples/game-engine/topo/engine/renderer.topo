@@ -1,0 +1,98 @@
+// engine/renderer.topo — DAG pipeline + template types + lifetime over staged block
+//
+// Showcases: pipeline DAG with fork/join, template specialization via
+// instantiate, lifetime scoping a staged fn block, priority on draw ops
+
+using int = std::cpp17::int;
+using bool = std::cpp17::bool;
+using size_t = std::cpp17::size_t;
+
+import physics;
+
+namespace engine::renderer {
+
+  public:
+    type Camera {}
+    type Viewport {}
+    type RenderTarget {}
+
+    type GpuBuffer {
+      public:
+        size_t size() const;
+        bool is_mapped() const;
+        void bind(int slot);
+      private:
+        int handle;
+        size_t capacity;
+    }
+
+    // Template type — DrawBatch is parameterized over payload kind
+    template<typename T>
+    type DrawBatch {
+      public:
+        void push(const T& item, int sort_key);
+        int count() const;
+        void clear();
+
+      private:
+        GpuBuffer buffer;
+    }
+
+    type MeshData {}
+    type ParticleData {}
+    instantiate DrawBatch<MeshData>;
+    instantiate DrawBatch<ParticleData>;
+
+  // ── Render pipeline DAG (fork at cull, join at composite) ──────────
+
+  public:
+    priority(critical):
+    int render_pipeline(int frame);
+
+    fn render_pipeline {
+      cull -> sort_opaque;
+      cull -> sort_transparent;
+      sort_opaque -> draw_opaque;
+      sort_transparent -> draw_transparent;
+      draw_opaque -> composite;
+      draw_transparent -> composite;
+      composite -> int;
+    }
+
+  // ── Lifetime spanning the staged setup block ──────────────────────
+
+  // ── Top-level render entry points (called from main game loop) ───
+
+  public:
+    void draw(int frame);
+    void present();
+
+  lifetime render_pass = begin_render_pass..end_render_pass;
+  public:
+    void setup_frame(const Camera& cam, const Viewport& vp);
+
+    // Staged block — stage<1> operations run in parallel
+    fn setup_frame {
+      stage<1> begin_render_pass();
+      stage<1> bind_camera(cam);
+      stage<2> set_viewport(vp);
+      stage<3> clear_targets();
+    }
+
+  protected:
+    int cull(int frame);
+    int sort_opaque(int culled);
+    int sort_transparent(int culled);
+    int draw_opaque(int sorted);
+    int draw_transparent(int sorted);
+    int composite(int opaque, int transparent);
+    void begin_render_pass();
+    void end_render_pass();
+    void bind_camera(const Camera& cam);
+    void set_viewport(const Viewport& vp);
+    void clear_targets();
+
+  private:
+    void flush_gpu_commands();
+    void swap_backbuffer();
+}

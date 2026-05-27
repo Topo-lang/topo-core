@@ -1,0 +1,102 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://topo.dev/schemas/topo-dbg-v1.json",
+  "title": "Topo Debug Metadata (*.topo-dbg.json) — Schema v1",
+  "description": "Plan 40 Phase 0 base schema. backend_ext is open-shaped; Plans 41-44 layer per-host segments under it. See .aidesk/live/30-planning/40-topo-debug-profile-core.md §2.3.",
+  "type": "object",
+  "required": ["schema_version", "source", "symbols"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1"]
+    },
+    "source": {
+      "type": "object",
+      "required": ["topo_files", "host_files"],
+      "additionalProperties": false,
+      "properties": {
+        "topo_files": { "type": "array", "items": { "type": "string" } },
+        "host_files": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "symbols": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "topo_name",
+          "host_symbol",
+          "kind",
+          "layout_inverse",
+          "views",
+          "render_decls",
+          "inactive_regions",
+          "backend_ext"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "topo_name": { "type": "string" },
+          "host_symbol": { "type": "string" },
+          "kind": { "type": "string", "enum": ["type", "data", "function"] },
+          "layout_inverse": { "type": "object" },
+          "views": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "expr"],
+              "additionalProperties": false,
+              "properties": {
+                "name": { "type": "string" },
+                "expr": { "$ref": "#/$defs/sliceExpr" }
+              }
+            }
+          },
+          "summary_template": { "type": "string" },
+          "inactive_regions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["expr", "mode"],
+              "additionalProperties": false,
+              "properties": {
+                "expr": { "$ref": "#/$defs/sliceExpr" },
+                "mode": { "type": "string", "enum": ["default", "grayed", "hidden"] }
+              }
+            }
+          },
+          "render_decls": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["method", "raw_body"],
+              "additionalProperties": false,
+              "properties": {
+                "method": { "type": "string" },
+                "raw_body": { "type": "string" }
+              }
+            }
+          },
+          "backend_ext": {
+            "type": "object",
+            "description": "Per-backend extensions; keys like 'llvm', 'jvm', 'python', 'v8' (Plans 41-44).",
+            "additionalProperties": { "type": "object" }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sliceExpr": {
+      "type": "object",
+      "required": ["kind", "container"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "type": "string", "enum": ["field", "slice"] },
+        "container": { "type": "string" },
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

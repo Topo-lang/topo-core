@@ -1,0 +1,11 @@
+// Caller uses public function from same namespace — should succeed
+
+import lib;
+
+namespace shared {
+  public:
+    void doWork();
+    fn doWork {
+      serve();
+    }
+}
