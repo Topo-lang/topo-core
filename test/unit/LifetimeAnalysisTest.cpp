@@ -91,7 +91,7 @@ namespace engine {
     EXPECT_FALSE(result.lifetimeAnnotatedFunctions.count("engine::render"));
 }
 
-// --- M4.1 extensions --------------------------------------------------------
+// --- Scope-interaction edge cases ------------------------------------------
 //
 // The four TESTs below construct a SymbolTable directly so we can cover
 // scope-interaction edge cases without depending on additional surface

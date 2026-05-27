@@ -316,6 +316,52 @@ TranspileResult TranspileDriver::runFromTopoSource(const TranspileRequest& reque
     }
     result.outputFiles.push_back(outputPath.string());
 
+    // 5b. Graduation manifest: copy the source `.topo` into the output
+    // directory and write a Topo.toml so the result is a drop-in project
+    // (consumer can `topo build` from outputDir without rewriting build
+    // config). Only emitted in `.topo`-source mode, where the output is
+    // intended as a self-contained project skeleton.
+    {
+        fs::path topoCopy = request.outputDir / (stem + ".topo");
+        std::error_code ec;
+        if (topoCopy != request.topoFile) {
+            fs::copy_file(
+                request.topoFile, topoCopy,
+                fs::copy_options::overwrite_existing, ec);
+        }
+        if (ec) {
+            result.warnings.push_back("failed to copy .topo into output dir: " +
+                                      ec.message());
+        } else if (topoCopy != request.topoFile) {
+            result.outputFiles.push_back(topoCopy.string());
+        }
+
+        const char* langStr = "cpp";
+        switch (request.targetLanguage) {
+        case HostLanguage::Cpp:        langStr = "cpp"; break;
+        case HostLanguage::Rust:       langStr = "rust"; break;
+        case HostLanguage::Java:       langStr = "java"; break;
+        case HostLanguage::Python:     langStr = "python"; break;
+        case HostLanguage::TypeScript: langStr = "typescript"; break;
+        case HostLanguage::Mixed:      langStr = "mixed"; break;
+        }
+
+        fs::path tomlPath = request.outputDir / "Topo.toml";
+        std::ofstream ofs(tomlPath);
+        if (!ofs) {
+            result.warnings.push_back("failed to write Topo.toml: " +
+                                      tomlPath.string());
+        } else {
+            ofs << "[topo]\n"
+                << "root = \"" << stem << ".topo\"\n"
+                << "\n"
+                << "[build]\n"
+                << "language = \"" << langStr << "\"\n"
+                << "sources = [\"" << stem << extension << "\"]\n";
+            result.outputFiles.push_back(tomlPath.string());
+        }
+    }
+
     // 6. Structured post-transpile verification (pure aggregate) + warnings.
     result.verification = verifyModule(module);
     result.unsupportedCount = result.verification.totalUnsupported;

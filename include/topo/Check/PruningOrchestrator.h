@@ -3,11 +3,11 @@
 
 #include "topo/Check/StubRewriter.h"
 #include "topo/Analysis/StageAnalysis.h"
-#include "topo/Sema/SymbolTable.h"
 
-#include <functional>
 #include <memory>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace topo::check {
@@ -59,8 +59,7 @@ struct PruningConfig {
 /// higher stages, not on lower-stage implementation details.
 class PruningOrchestrator {
 public:
-    PruningOrchestrator(const SymbolTable& symbols,
-                        const analysis::StageAnalysisResult& stageInfo,
+    PruningOrchestrator(const analysis::StageAnalysisResult& stageInfo,
                         std::unique_ptr<StubRewriter> rewriter,
                         const PruningConfig& config);
 
@@ -80,7 +79,6 @@ private:
     /// Key: stage number, Value: set of simple function names.
     std::unordered_map<int, std::unordered_set<std::string>> buildStageGroups() const;
 
-    const SymbolTable& symbols_;
     analysis::StageAnalysisResult stageInfo_;
     std::unique_ptr<StubRewriter> rewriter_;
     PruningConfig config_;

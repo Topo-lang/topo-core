@@ -1,4 +1,4 @@
-/// M6.2 Cross-Language Transpile Equivalence Tests
+/// Cross-Language Transpile Equivalence Tests
 ///
 /// Each fixture builds a TranspileModule, emits through all 4 emitters
 /// (C++/Rust/Java/Python), wraps each in a compilable program, compiles
@@ -3447,6 +3447,62 @@ TEST(TranspileFromTopoSource, UnresolvedLeafDegradesWithWarningAndExit1) {
     EXPECT_NE(code.find("TOPO-TRANSPILE: unsupported"), std::string::npos)
         << "degraded leaf body is missing the unsupported placeholder:\n"
         << code;
+
+    fs::remove_all(dir, ec);
+}
+
+// Graduation manifest: `--from topo` emits a Topo.toml + copies the source
+// `.topo` into the output directory so the result is a drop-in project
+// that can be consumed by `topo build` without any rewrite of build config.
+TEST(TranspileFromTopoSource, EmitsGraduationManifest) {
+    const std::string cli = TOPO_TRANSPILE_CLI_BINARY;
+    if (cli.empty() || !fs::exists(cli)) {
+        GTEST_SKIP() << "topo-transpile CLI binary not available at '" << cli
+                     << "'";
+    }
+
+    fs::path dir = fs::temp_directory_path() / "topo-source-graduation";
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+    fs::create_directories(dir);
+
+    fs::path topoFile = dir / "pipe.topo";
+    { std::ofstream(topoFile) << kM6FixtureTopo; }
+    fs::path manifest = dir / "adapters.json";
+    { std::ofstream(manifest) << m6AdapterManifest(); }
+
+    fs::path outDir = dir / "out";
+    auto r = topo::platform::runProcessCaptureWithTimeout(
+        cli,
+        {"--from", "topo", "--to", "cpp",
+         "--adapters", manifest.string(),
+         "--output", outDir.string(), topoFile.string()},
+        30000);
+    ASSERT_EQ(r.exitCode, 0)
+        << "transpile failed:\n" << r.stderrOutput << r.stdoutOutput;
+
+    // Topo.toml emitted alongside the host source, with the consumer fields
+    // populated so `topo build` from outDir works without manual edits.
+    fs::path tomlPath = outDir / "Topo.toml";
+    ASSERT_TRUE(fs::exists(tomlPath)) << "Topo.toml not emitted in " << outDir;
+    std::ifstream tomlIn(tomlPath);
+    std::string toml((std::istreambuf_iterator<char>(tomlIn)),
+                     std::istreambuf_iterator<char>());
+    EXPECT_NE(toml.find("root = \"pipe.topo\""), std::string::npos)
+        << "Topo.toml missing [topo].root:\n" << toml;
+    EXPECT_NE(toml.find("language = \"cpp\""), std::string::npos)
+        << "Topo.toml missing [build].language:\n" << toml;
+    EXPECT_NE(toml.find("sources = [\"pipe.cpp\"]"), std::string::npos)
+        << "Topo.toml missing [build].sources:\n" << toml;
+
+    // Source `.topo` copied alongside.
+    fs::path copiedTopo = outDir / "pipe.topo";
+    ASSERT_TRUE(fs::exists(copiedTopo))
+        << "source .topo not copied to " << outDir;
+
+    // Host source still emitted (regression check on the existing path).
+    EXPECT_TRUE(fs::exists(outDir / "pipe.cpp"))
+        << "pipe.cpp missing from " << outDir;
 
     fs::remove_all(dir, ec);
 }

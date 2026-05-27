@@ -133,7 +133,7 @@ TEST(PriorityAnalysis, EmptySymbolTable) {
     EXPECT_TRUE(result.effectivePriority.empty());
 }
 
-// --- M4.1 extensions --------------------------------------------------------
+// --- Extension test helpers ------------------------------------------------
 //
 // Helper utility to keep the extension tests compact and self-contained.
 

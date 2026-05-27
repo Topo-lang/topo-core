@@ -78,7 +78,7 @@ TEST(PruningOrchestrator, EmptySymbolTablePassesTrivially) {
     config.projectDir = "/tmp";
     config.testCommand = "echo ok";
 
-    PruningOrchestrator orch(symbols, stageInfo, std::move(rewriter), config);
+    PruningOrchestrator orch(stageInfo, std::move(rewriter), config);
     auto result = orch.verifyAllStages();
 
     EXPECT_TRUE(result.passed());
@@ -107,7 +107,7 @@ TEST(PruningOrchestrator, SingleStagePassesTrivially) {
     config.projectDir = "/tmp";
     config.testCommand = "echo ok";
 
-    PruningOrchestrator orch(symbols, stageInfo, std::move(rewriter), config);
+    PruningOrchestrator orch(stageInfo, std::move(rewriter), config);
     auto result = orch.verifyAllStages();
 
     EXPECT_TRUE(result.passed());
@@ -152,7 +152,7 @@ TEST(PruningOrchestrator, MultipleStagesHighestFirst) {
     config.projectDir = "/tmp";
     config.testCommand = "echo ok";
 
-    PruningOrchestrator orch(symbols, stageInfo, std::move(rewriter), config);
+    PruningOrchestrator orch(stageInfo, std::move(rewriter), config);
     auto result = orch.verifyAllStages();
 
     EXPECT_EQ(result.stages.size(), 3u);
@@ -191,7 +191,7 @@ TEST(PruningOrchestrator, VerifySingleStageStubsLowerStages) {
     config.projectDir = "/tmp";
     config.testCommand = "echo ok";
 
-    PruningOrchestrator orch(symbols, stageInfo, std::move(rewriter), config);
+    PruningOrchestrator orch(stageInfo, std::move(rewriter), config);
     auto result = orch.verifyStage(2);
 
     EXPECT_EQ(result.stage, 2);
@@ -222,7 +222,7 @@ TEST(PruningOrchestrator, LowestStageHasNothingToStub) {
     config.projectDir = "/tmp";
     config.testCommand = "echo ok";
 
-    PruningOrchestrator orch(symbols, stageInfo, std::move(rewriter), config);
+    PruningOrchestrator orch(stageInfo, std::move(rewriter), config);
     auto result = orch.verifyStage(1);
 
     EXPECT_TRUE(result.passed());
@@ -263,7 +263,7 @@ TEST(PruningOrchestrator, StageGroupingWithMultipleFunctionsPerStage) {
     config.projectDir = "/tmp";
     config.testCommand = "echo ok";
 
-    PruningOrchestrator orch(symbols, stageInfo, std::move(rewriter), config);
+    PruningOrchestrator orch(stageInfo, std::move(rewriter), config);
 
     // Stage 2 should stub both stage-1 functions
     auto result = orch.verifyStage(2);

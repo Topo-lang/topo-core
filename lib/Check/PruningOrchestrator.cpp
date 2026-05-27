@@ -48,11 +48,10 @@ std::string simpleName(const std::string& qualifiedName) {
 
 } // anonymous namespace
 
-PruningOrchestrator::PruningOrchestrator(const SymbolTable& symbols,
-                                         const analysis::StageAnalysisResult& stageInfo,
+PruningOrchestrator::PruningOrchestrator(const analysis::StageAnalysisResult& stageInfo,
                                          std::unique_ptr<StubRewriter> rewriter,
                                          const PruningConfig& config)
-    : symbols_(symbols), stageInfo_(stageInfo), rewriter_(std::move(rewriter)), config_(config) {}
+    : stageInfo_(stageInfo), rewriter_(std::move(rewriter)), config_(config) {}
 
 bool PruningOrchestrator::runBuildAndTest(std::string& error) {
     auto parts = splitCommand(config_.testCommand);
