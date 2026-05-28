@@ -73,7 +73,15 @@ option(TOPO_CORE_DEFER_LANG_SUBDIRS
     OFF)
 if(NOT TOPO_CORE_DEFER_LANG_SUBDIRS)
     if(NOT TARGET topo::lang::TopoLang)
+        # Set the cycle-guard sentinel before find_package(topo-lang) so
+        # topo-langConfig skips find_dependency(topo-core) — otherwise
+        # that cascade tries to import the previously-installed
+        # topo::core::* targets, which conflict with the same-named
+        # targets/ALIASes already defined by this in-progress topo-core
+        # configure. See topo-langConfig.cmake.in for the matching guard.
+        set(_topo_core_loading TRUE)
         find_package(topo-lang CONFIG QUIET)
+        unset(_topo_core_loading)
     endif()
     if(TARGET topo::lang::TopoLang)
         message(STATUS "topo-lang found — building TopoBuildLib + TopoTranspile")
