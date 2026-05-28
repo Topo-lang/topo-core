@@ -155,6 +155,21 @@ Leave empty in standalone builds.")
 
 if(TOPO_CORE_BUILD_TESTS AND (PROJECT_IS_TOP_LEVEL OR TOPO_META_DRIVING_TESTS))
     enable_testing()
+    # GoogleTest setup — only needed when topo-core drives its own tests
+    # (PROJECT_IS_TOP_LEVEL) or meta is driving but topo-core is the only
+    # consumer in that scope. Meta-embedded mode where another sibling
+    # already FetchContent'd googletest gets the targets transparently via
+    # CMake's global target registry; the second FetchContent here would
+    # short-circuit because the source dir is already populated.
+    if(NOT TARGET GTest::gtest_main)
+        include(FetchContent)
+        FetchContent_Declare(googletest
+            URL https://github.com/google/googletest/archive/refs/tags/v1.15.2.tar.gz)
+        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(googletest)
+    endif()
+    set(CMAKE_GTEST_DISCOVER_TESTS_DISCOVERY_MODE PRE_TEST)
+    include(GoogleTest)
     add_subdirectory(test)
 endif()
 
