@@ -2,7 +2,6 @@
 # unanchored `build/` would swallow source paths like include/topo/Build/,
 # lib/Build/, test/build/ during `git add -A`)
 /build/
-/build-*/
 /out/
 /cmake-build-*/
 
