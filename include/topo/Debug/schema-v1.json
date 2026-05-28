@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://topo.dev/schemas/topo-dbg-v1.json",
   "title": "Topo Debug Metadata (*.topo-dbg.json) — Schema v1",
-  "description": "Plan 40 Phase 0 base schema. backend_ext is open-shaped; Plans 41-44 layer per-host segments under it. See .aidesk/live/30-planning/40-topo-debug-profile-core.md §2.3.",
+  "description": "Base schema for the *.topo-dbg.json metadata sidecar emitted by the debug profile core. `backend_ext` is open-shaped so per-host backends (LLVM/JVM/V8) may layer their own segments without breaking this schema.",
   "type": "object",
   "required": ["schema_version", "source", "symbols"],
   "additionalProperties": false,
