@@ -104,3 +104,159 @@ jobs:
               -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
           cmake --build build
           ./build/smoke
+
+  # ── Standalone TESTS=ON+WITH_LANG=ON verification ────────
+  # Closes split-topo-core-deferred-cleanup.md: the standalone test tree
+  # gates language-plugin-dependent suites behind `TOPO_CORE_WITH_LANG`
+  # (i.e. find_package(topo-lang) success) plus the per-language
+  # Transpile/Plugin targets shipped by topo-lang-{cpp,rust,java,python}.
+  # The base build-and-test job above runs with TESTS off and exercises
+  # only the find_package chain, not the language-plugin-coupled tests.
+  # This job installs the full 5-package chain (topo-lang +
+  # topo-lang-{cpp,rust,java,python}) to one prefix, re-installs
+  # topo-core with WITH_LANG=ON, then drives standalone topo-core
+  # TESTS=ON ctest — the verification originally deferred at split time.
+  # Linux-only to keep CI cost manageable; the cross-platform matrix is
+  # covered by the base job.
+  verify-with-lang:
+    name: verify (TESTS=ON, WITH_LANG=ON, ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+    env:
+      TOPO_LANG_REF: main
+      TOPO_LANG_CPP_REF: main
+      TOPO_LANG_RUST_REF: main
+      TOPO_LANG_JAVA_REF: main
+      TOPO_LANG_PYTHON_REF: main
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Export GHA cache env (for vcpkg x-gha backend)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+            core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: "56bb2411609227288b70117ead2c47585ba07713"
+
+      # Cache the assembled prefix keyed on every sibling's branch ref so
+      # PR retries reuse it. Bump the suffix when the install chain logic
+      # itself changes.
+      - name: Cache assembled lang prefix
+        id: lang-prefix-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/topo-install
+          key: topo-lang-prefix-${{ env.TOPO_LANG_REF }}-${{ env.TOPO_LANG_CPP_REF }}-${{ env.TOPO_LANG_RUST_REF }}-${{ env.TOPO_LANG_JAVA_REF }}-${{ env.TOPO_LANG_PYTHON_REF }}-v1
+
+      - name: Build & install topo-core (lang-less)
+        if: steps.lang-prefix-cache.outputs.cache-hit != 'true'
+        run: |
+          cmake -S . -B "${RUNNER_TEMP}/topo-core-build" \
+              -G Ninja -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX="${RUNNER_TEMP}/topo-install" \
+              -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+          cmake --build "${RUNNER_TEMP}/topo-core-build" --target install
+
+      - name: Build & install topo-lang
+        if: steps.lang-prefix-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch "${TOPO_LANG_REF}" \
+              https://github.com/topo-lang/topo-lang.git \
+              "${RUNNER_TEMP}/topo-lang-src"
+          cmake -S "${RUNNER_TEMP}/topo-lang-src" \
+                -B "${RUNNER_TEMP}/topo-lang-build" \
+                -G Ninja -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX="${RUNNER_TEMP}/topo-install" \
+                -DCMAKE_PREFIX_PATH="${RUNNER_TEMP}/topo-install" \
+                -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+          cmake --build "${RUNNER_TEMP}/topo-lang-build" --target install
+
+      # Each per-language plugin package: default install scope only
+      # (no LLVM / JVM backends), just the Plugin + Transpile + Check
+      # libraries that topo-core-tests links against.
+      - name: Build & install topo-lang-cpp
+        if: steps.lang-prefix-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch "${TOPO_LANG_CPP_REF}" \
+              https://github.com/topo-lang/topo-lang-cpp.git \
+              "${RUNNER_TEMP}/topo-lang-cpp-src"
+          cmake -S "${RUNNER_TEMP}/topo-lang-cpp-src" \
+                -B "${RUNNER_TEMP}/topo-lang-cpp-build" \
+                -G Ninja -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX="${RUNNER_TEMP}/topo-install" \
+                -DCMAKE_PREFIX_PATH="${RUNNER_TEMP}/topo-install" \
+                -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+          cmake --build "${RUNNER_TEMP}/topo-lang-cpp-build" --target install
+
+      - name: Build & install topo-lang-rust
+        if: steps.lang-prefix-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch "${TOPO_LANG_RUST_REF}" \
+              https://github.com/topo-lang/topo-lang-rust.git \
+              "${RUNNER_TEMP}/topo-lang-rust-src"
+          cmake -S "${RUNNER_TEMP}/topo-lang-rust-src" \
+                -B "${RUNNER_TEMP}/topo-lang-rust-build" \
+                -G Ninja -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX="${RUNNER_TEMP}/topo-install" \
+                -DCMAKE_PREFIX_PATH="${RUNNER_TEMP}/topo-install" \
+                -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+          cmake --build "${RUNNER_TEMP}/topo-lang-rust-build" --target install
+
+      - name: Build & install topo-lang-java
+        if: steps.lang-prefix-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch "${TOPO_LANG_JAVA_REF}" \
+              https://github.com/topo-lang/topo-lang-java.git \
+              "${RUNNER_TEMP}/topo-lang-java-src"
+          cmake -S "${RUNNER_TEMP}/topo-lang-java-src" \
+                -B "${RUNNER_TEMP}/topo-lang-java-build" \
+                -G Ninja -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX="${RUNNER_TEMP}/topo-install" \
+                -DCMAKE_PREFIX_PATH="${RUNNER_TEMP}/topo-install" \
+                -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+          cmake --build "${RUNNER_TEMP}/topo-lang-java-build" --target install
+
+      - name: Build & install topo-lang-python
+        if: steps.lang-prefix-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch "${TOPO_LANG_PYTHON_REF}" \
+              https://github.com/topo-lang/topo-lang-python.git \
+              "${RUNNER_TEMP}/topo-lang-python-src"
+          cmake -S "${RUNNER_TEMP}/topo-lang-python-src" \
+                -B "${RUNNER_TEMP}/topo-lang-python-build" \
+                -G Ninja -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX="${RUNNER_TEMP}/topo-install" \
+                -DCMAKE_PREFIX_PATH="${RUNNER_TEMP}/topo-install" \
+                -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+          cmake --build "${RUNNER_TEMP}/topo-lang-python-build" --target install
+
+      # Re-install topo-core with TOPO_CORE_WITH_LANG=ON now that
+      # topo-lang is on the prefix path. The cycle-guard at the
+      # find_package(topo-lang) call site (topo-core@cf8c44d) keeps the
+      # cold-install case from tripping the "targets already defined"
+      # error; the FetchContent(googletest) wiring (topo-core@c01b4a0)
+      # provides GTest::gtest_main for the standalone TESTS=ON path.
+      - name: Standalone topo-core configure (TESTS=ON, WITH_LANG=ON)
+        run: |
+          cmake -S . -B build-with-lang -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DTOPO_CORE_BUILD_TESTS=ON \
+              -DCMAKE_PREFIX_PATH="${RUNNER_TEMP}/topo-install" \
+              -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+
+      - name: Build
+        run: cmake --build build-with-lang
+
+      - name: Test
+        run: ctest --test-dir build-with-lang --output-on-failure --timeout 180
