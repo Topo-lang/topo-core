@@ -3121,25 +3121,11 @@ debugpy and re-run cmake to enable these.")
             LABELS "e2e;topo-debug-python;toolchain"
             TIMEOUT 5)
     endif()
-elseif(TOPO_CORE_WITH_LANG)
-    # topo-debug-python is expected when find_package(topo-lang) succeeded
-    # and topo-lang-python contributed the adapter target. Its absence
-    # under TOPO_CORE_WITH_LANG=ON is a verification gap — register an
-    # always-fail placeholder with a clear diagnostic. In a standalone
-    # topo-core configure (TOPO_CORE_WITH_LANG=OFF) the adapter target
-    # lives in a sibling package that simply is not on the prefix path
-    # yet — that is the expected state, not a gap.
-    add_test(NAME e2e.topo-debug-python.MISSING
-        COMMAND ${CMAKE_COMMAND} -E echo
-                "topo-debug-python adapter not built: no Python3 \
-interpreter found at configure time. Install Python 3 (>=3.8 for the \
-pdb fallback; >=3.12 additionally enables --mode=sys-monitoring) and \
-re-run cmake.")
-    set_tests_properties(e2e.topo-debug-python.MISSING PROPERTIES
-        WILL_FAIL TRUE
-        LABELS "e2e;topo-debug-python;toolchain"
-        TIMEOUT 5)
 endif()
+# Note: the "Python3 found but topo-debug-python target missing" verification
+# gap previously enforced here as e2e.topo-debug-python.MISSING was moved to
+# topo-lang-python/test/CMakeLists.txt — the contract holder for "if you
+# import me, I must provide topo-debug-python".
 
 # Feature dimension labels
 set_property(DIRECTORY APPEND PROPERTY
