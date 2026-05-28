@@ -1,9 +1,9 @@
 // Tests for PassCategoryRegistry.
 //
-// The registry is the code-side mirror of the authoritative pass-to-category
-// table in `.aidesk/base/20-principle/02-feature-taxonomy.md` §5. Every
-// expectation in this file must match that document; if the table moves,
-// so does this file.
+// The registry is the code-side mirror of the project's feature-taxonomy
+// principle: six categories (OPT / ENHANCE / COVERED / INSTRUMENT / INFRA /
+// RUNTIME) classify every pass. Every expectation in this file must match
+// that taxonomy; if the taxonomy moves, so does this file.
 
 #include "topo/Build/PassCategoryRegistry.h"
 

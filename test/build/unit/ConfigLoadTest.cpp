@@ -234,9 +234,6 @@ TEST(ConfigCheckValidator, EmptyRawCheckIsValid) {
 // ---------------------------------------------------------------------------
 // [pipeline].mode parsing
 //
-// Closes .aidesk/live/40-issue/
-//   config-pipeline-section-not-in-knownsections.md
-//
 // Before fix: `[pipeline]` was absent from knownSections, so
 // `mode = "off"` silently passed through ConfigValidator as "unknown
 // section ignored" and never reached PipelineCodeGenPass / PipelinePass.
@@ -378,8 +375,6 @@ output = "out"
 // ---------------------------------------------------------------------------
 // TOML [optimize.data-layout].mode parsing
 //
-// Closes .aidesk/live/40-issue/data-layout-mode-force-parses-to-off.md
-//
 // Before fix: a bespoke switch accepted only "soa"/"auto" and routed
 // everything else (including "force") to FeatureMode::Off, so benchmarks
 // that declared `mode = "force"` silently ran with DataLayoutPass disabled.
@@ -463,8 +458,6 @@ mode = "soa"
 // ---------------------------------------------------------------------------
 // TOML [build.java].target_version parsing
 //
-// Closes .aidesk/live/40-issue/topo-build-java-target-version-not-forwarded.md
-//
 // Before fix: Config.cpp had no parser for [build.java], so users setting
 // `target_version = "21"` (or any other value) were silently ignored and
 // the backend always saw its hardcoded default. These tests pin the parse.
@@ -526,9 +519,6 @@ mode = "aos"
 // ---------------------------------------------------------------------------
 // TOML [loop_parallel].reduction parsing
 //
-// Closes .aidesk/live/40-issue/
-//   loop-parallel-reduction-key-false-unknown-warning.md
-//
 // Before fix: Config.cpp read `reduction` into
 // loopParallelCfg.reductionEnabled, but `reduction` was absent from the
 // [loop_parallel] warnUnknownKeys known-key set, so a correct
@@ -570,8 +560,6 @@ reduction = true
 
 // ---------------------------------------------------------------------------
 // BackendRequest.backendExtras schema enforcement
-//
-// Closes .aidesk/live/40-issue/jvm-backend-request-extras-schema-unstated.md
 //
 // The deserializer must:
 //   - round-trip the documented JVM keys (javaHome / classpath / jvmArgs /
@@ -774,8 +762,7 @@ TEST(BackendRequestExtras, KnownKeysRegistryPinnedPerBackend) {
     EXPECT_TRUE(contains(ts, "packageManager"));
 
     // JVM is the only enforced sub-schema today; others stay
-    // silent-tolerant (failure-modes table in
-    // .aidesk/base/60-spec/topo-build/backend-protocol.md).
+    // silent-tolerant per the backend-protocol failure-modes contract.
     EXPECT_TRUE(backendExtrasRejectsUnknown(HostLanguage::Java));
     EXPECT_FALSE(backendExtrasRejectsUnknown(HostLanguage::Cpp));
     EXPECT_FALSE(backendExtrasRejectsUnknown(HostLanguage::Rust));

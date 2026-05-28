@@ -320,8 +320,7 @@
 # ============================================================================
 # Debug declarations (Plan 40 Phase 0)
 # `debug T { view ... summary ... inactive_region ... render ... }` produces
-# metadata only — zero codegen impact. See
-# `.aidesk/live/30-planning/40-topo-debug-profile-core.md` §2.1.
+# metadata only — zero codegen impact.
 # ============================================================================
 [debug]
 
