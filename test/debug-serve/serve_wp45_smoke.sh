@@ -34,6 +34,16 @@ SERVER_PID=""
 cleanup() {
     if [ -n "$SERVER_PID" ]; then
         kill "$SERVER_PID" 2>/dev/null || true
+        # 2s grace period for graceful shutdown — locally the serve
+        # process exits on SIGTERM in <100ms, but on the GHA ubuntu-24.04
+        # CI runner the verify-with-lang job hit the full --timeout 180s
+        # budget here (smoke logic itself printed "OK" first; the hang was
+        # entirely in `wait`). Escalate to SIGKILL if SIGTERM didn't take.
+        for _ in $(seq 1 20); do
+            kill -0 "$SERVER_PID" 2>/dev/null || break
+            sleep 0.1
+        done
+        kill -9 "$SERVER_PID" 2>/dev/null || true
         wait "$SERVER_PID" 2>/dev/null || true
     fi
     rm -f "$LOG"
