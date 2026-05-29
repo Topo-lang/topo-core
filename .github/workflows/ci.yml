@@ -182,6 +182,22 @@ jobs:
                 -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
           cmake --build "${RUNNER_TEMP}/topo-lang-build" --target install
 
+      # Re-install topo-core now that topo-lang is on the prefix path so
+      # TOPO_CORE_WITH_LANG auto-flips ON and TopoBuildLib / TopoTranspile /
+      # TopoCheckRunner get added to the TopoCoreTargets export set.
+      # Without this step the per-language plugin packages below fail with
+      # `target topo::core::TopoTranspile not found` because the lang-less
+      # first install (above) didn't export those targets.
+      - name: Re-install topo-core (WITH_LANG=ON)
+        if: steps.lang-prefix-cache.outputs.cache-hit != 'true'
+        run: |
+          cmake -S . -B "${RUNNER_TEMP}/topo-core-rebuild" \
+              -G Ninja -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX="${RUNNER_TEMP}/topo-install" \
+              -DCMAKE_PREFIX_PATH="${RUNNER_TEMP}/topo-install" \
+              -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+          cmake --build "${RUNNER_TEMP}/topo-core-rebuild" --target install
+
       # Each per-language plugin package: default install scope only
       # (no LLVM / JVM backends), just the Plugin + Transpile + Check
       # libraries that topo-core-tests links against.
