@@ -17,6 +17,40 @@
 # topo-core unit tests — built only when the plugin-aware libs they link
 # against (TopoBuildLib, TopoCppTranspile, ...) are available.
 if(TOPO_CORE_WITH_LANG)
+    # Per-language plugin packages come from add_subdirectory in monorepo
+    # or from installed packages in standalone. QUIET so monorepo (where
+    # no installed config exists yet — the in-source aliases supply the
+    # targets via add_subdirectory) stays silent.
+    foreach(_topo_lang IN ITEMS cpp rust java python typescript)
+        find_package(topo-lang-${_topo_lang} CONFIG QUIET)
+    endforeach()
+
+    # Bridge: monorepo gets bare target names (TopoCppTranspile etc) from
+    # add_subdirectory; standalone find_package only imports namespaced
+    # (topo::lang-cpp::TopoCppTranspile). The transpile/, fuzz/, check/,
+    # init/ subdirectories below historically gate on bare names. Define
+    # unprefixed aliases for the imported targets so existing
+    # if(TARGET <bare>) checks work uniformly across both build modes.
+    foreach(_alias_pair IN ITEMS
+        "TopoCppTranspile|topo::lang-cpp::TopoCppTranspile"
+        "TopoRustTranspile|topo::lang-rust::TopoRustTranspile"
+        "TopoJavaTranspile|topo::lang-java::TopoJavaTranspile"
+        "TopoPythonTranspile|topo::lang-python::TopoPythonTranspile"
+        "TopoCppPlugin|topo::lang-cpp::TopoCppPlugin"
+        "TopoRustPlugin|topo::lang-rust::TopoRustPlugin"
+        "TopoJavaPlugin|topo::lang-java::TopoJavaPlugin"
+        "TopoPythonPlugin|topo::lang-python::TopoPythonPlugin"
+        "TopoTypeScriptPlugin|topo::lang-typescript::TopoTypeScriptPlugin"
+        "TopoCppAnalysis|topo::lang-cpp::TopoCppAnalysis"
+    )
+        string(REPLACE "|" ";" _pair "${_alias_pair}")
+        list(GET _pair 0 _bare)
+        list(GET _pair 1 _ns)
+        if(TARGET ${_ns} AND NOT TARGET ${_bare})
+            add_library(${_bare} ALIAS ${_ns})
+        endif()
+    endforeach()
+
     add_executable(topo-core-tests
         unit/LexerTest.cpp
         unit/ParserTest.cpp
@@ -63,7 +97,10 @@ if(TOPO_CORE_WITH_LANG)
     # Explicit TopoCheck and TopoTranspile were the duplicates.
     target_link_libraries(topo-core-tests PRIVATE
         TopoTransform TopoDebug
-        TopoCppTranspile TopoRustTranspile TopoJavaTranspile TopoPythonTranspile
+        topo::lang-cpp::TopoCppTranspile
+        topo::lang-rust::TopoRustTranspile
+        topo::lang-java::TopoJavaTranspile
+        topo::lang-python::TopoPythonTranspile
         TopoBuildLib TopoDistribution
         nlohmann_json::nlohmann_json
         GTest::gtest_main
