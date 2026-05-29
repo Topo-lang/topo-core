@@ -432,11 +432,15 @@ if(NOT WIN32)
         ENVIRONMENT
             "TOPO_DEBUG_BIN=$<TARGET_FILE:topo-debug>;TOPO_DEBUG_MOCK=$<TARGET_FILE:topo-debug-mock-adapter>;DEBUG_META=${_SERVE_META};PORT=18764;AI_PORT=18765"
         LABELS "e2e;topo-debug-serve;toolchain"
-        # Earlier this had TIMEOUT 180 to survive 15 python3-fork JSON
-        # validations on the CI runner. The json_ok helper now does a
-        # cheap brace check (no python3 fork), bringing CI wall-clock back
-        # in line with the local ~5s. 60s gives plenty of headroom.
-        TIMEOUT 60)
+        # 180s: the json_ok helper was switched to a cheap brace check
+        # (no python3 fork) which makes local wall-clock ~5s, so 60s
+        # *looks* like plenty of headroom — but the verify-with-lang CI
+        # job on ubuntu-24.04 still racks up >60s (run 26610561141 hit
+        # 60.06s timeout). Process spawning + 15+ localhost curls + 20×
+        # 0.2s server-up polls add up on the runner. Keep 180s as the
+        # documented historical value until the slow path is diagnosed.
+        # See issue wp45-still-slow-on-ci-after-json-ok-optimization.
+        TIMEOUT 180)
 endif()
 
 # topo-debug-cpp real lldb adapter (label: topo-debug-cpp).
