@@ -425,21 +425,18 @@ if(NOT WIN32)
 
     # --ai-export + GET /templates/<name> + --once
     # serve smoke (label: topo-debug-serve). Mock-adapter backed; no LLVM.
-    set(_SERVE_WP45 "${CMAKE_CURRENT_SOURCE_DIR}/debug-serve/serve_wp45_smoke.sh")
-    add_test(NAME e2e.topo-debug-serve.wp45
-        COMMAND bash "${_SERVE_WP45}")
-    set_tests_properties(e2e.topo-debug-serve.wp45 PROPERTIES
+    set(_SERVE_EXPORT_TEMPLATES "${CMAKE_CURRENT_SOURCE_DIR}/debug-serve/serve_export_templates_smoke.sh")
+    add_test(NAME e2e.topo-debug-serve.export-templates
+        COMMAND bash "${_SERVE_EXPORT_TEMPLATES}")
+    set_tests_properties(e2e.topo-debug-serve.export-templates PROPERTIES
         ENVIRONMENT
             "TOPO_DEBUG_BIN=$<TARGET_FILE:topo-debug>;TOPO_DEBUG_MOCK=$<TARGET_FILE:topo-debug-mock-adapter>;DEBUG_META=${_SERVE_META};PORT=18764;AI_PORT=18765"
         LABELS "e2e;topo-debug-serve;toolchain"
-        # 180s: the json_ok helper was switched to a cheap brace check
-        # (no python3 fork) which makes local wall-clock ~5s, so 60s
-        # *looks* like plenty of headroom — but the verify-with-lang CI
-        # job on ubuntu-24.04 still racks up >60s (run 26610561141 hit
-        # 60.06s timeout). Process spawning + 15+ localhost curls + 20×
-        # 0.2s server-up polls add up on the runner. Keep 180s as the
-        # documented historical value until the slow path is diagnosed.
-        # See issue wp45-still-slow-on-ci-after-json-ok-optimization.
+        # 180s headroom: the json_ok helper now uses a cheap brace check
+        # (no python3 fork), so local wall-clock is ~5s. CI runners can
+        # still approach a 60s timeout — process spawning, many localhost
+        # curls, and server-up polls add up — so keep 180s until the slow
+        # path is diagnosed.
         TIMEOUT 180)
 endif()
 

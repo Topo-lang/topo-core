@@ -1,4 +1,4 @@
-<!-- Plan 45 WP45d default template: summary card.
+<!-- Default template: summary card.
      Data model: { symbol, site, rendered, template, placeholders: [..] }
      Edit this file and refresh the browser — no tool rebuild needed. -->
 <div class="topo-tpl topo-summary">

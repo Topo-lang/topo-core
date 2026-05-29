@@ -1,4 +1,4 @@
-<!-- Plan 45 WP45d default template: 1D value table.
+<!-- Default template: 1D value table.
      Data model: { method, site, values: [ {idx, value}, ... ] }
      Refresh the browser to pick up edits — no rebuild. -->
 <div class="topo-tpl topo-table">

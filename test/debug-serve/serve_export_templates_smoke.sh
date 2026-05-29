@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Plan 45 WP45c/d/e — serve flag + AI export + templates smoke test.
+# `topo debug serve` flag + AI export + templates smoke test.
 #
 # Covers:
-#   WP45c  --ai-export <port>: loopback-only read-only /ai/* endpoints,
+#   --ai-export <port>: loopback-only read-only /ai/* endpoints,
 #          stable over >=5 GET requests, JSON schema-valid.
-#   WP45d  GET /templates/<name>: mustache-subset template served & rendered
+#   GET /templates/<name>: mustache-subset template served & rendered
 #          fresh on each request (edit-then-refresh, no rebuild).
-#   WP45e  --once <expr>: eval once, emit JSON, exit (no accept loop).
+#   --once <expr>: eval once, emit JSON, exit (no accept loop).
 #          --open / --attach are exercised at the argument-parsing level
 #          (a real browser / live pid is not available in CI).
 #
@@ -27,7 +27,7 @@ set -eu
 : "${PORT:?PORT not set}"
 : "${AI_PORT:?AI_PORT not set}"
 
-LOG=$(mktemp -t topo-debug-wp45.XXXXXX)
+LOG=$(mktemp -t topo-debug-serve-export.XXXXXX)
 TPLDIR=$(mktemp -d -t topo-debug-tpl.XXXXXX)
 SERVER_PID=""
 
@@ -35,10 +35,9 @@ cleanup() {
     if [ -n "$SERVER_PID" ]; then
         kill "$SERVER_PID" 2>/dev/null || true
         # 2s grace period for graceful shutdown — locally the serve
-        # process exits on SIGTERM in <100ms, but on the GHA ubuntu-24.04
-        # CI runner the verify-with-lang job hit the full --timeout 180s
-        # budget here (smoke logic itself printed "OK" first; the hang was
-        # entirely in `wait`). Escalate to SIGKILL if SIGTERM didn't take.
+        # process exits on SIGTERM in <100ms, but CI runners have hung in
+        # `wait` past the test timeout (the smoke logic itself printed
+        # "OK" first). Escalate to SIGKILL if SIGTERM didn't take.
         for _ in $(seq 1 20); do
             kill -0 "$SERVER_PID" 2>/dev/null || break
             sleep 0.1
@@ -59,7 +58,7 @@ fail() {
 }
 
 # ---------------------------------------------------------------------------
-# WP45e — --once: eval once against the mock fixture, print JSON, exit 0.
+# --once: eval once against the mock fixture, print JSON, exit 0.
 # ---------------------------------------------------------------------------
 ONCE_OUT=$("$TOPO_DEBUG_BIN" serve \
     --debug-meta "$DEBUG_META" \
@@ -73,14 +72,14 @@ echo "$ONCE_OUT" | grep -q '"ok": true' \
 echo "$ONCE_OUT" | grep -q '"result": 42' \
     || fail "--once result!=42: $ONCE_OUT"
 
-# WP45e — --once requires --break (arg validation).
+# --once requires --break (arg validation).
 if "$TOPO_DEBUG_BIN" serve --debug-meta "$DEBUG_META" \
         --mock-fixture 16x16_int_one_hot --adapter "$TOPO_DEBUG_MOCK" \
         --once 'sum(matrix)' >/dev/null 2>&1; then
     fail "--once without --break should have failed"
 fi
 
-# WP45e — --attach + --target mutually exclusive (arg validation).
+# --attach + --target mutually exclusive (arg validation).
 if "$TOPO_DEBUG_BIN" serve --debug-meta "$DEBUG_META" \
         --attach 12345 --target /bin/true --adapter "$TOPO_DEBUG_MOCK" \
         >/dev/null 2>&1; then
@@ -88,7 +87,7 @@ if "$TOPO_DEBUG_BIN" serve --debug-meta "$DEBUG_META" \
 fi
 
 # ---------------------------------------------------------------------------
-# WP45d — author a template, then start the server with --template-path.
+# Templates — author a template, then start the server with --template-path.
 # ---------------------------------------------------------------------------
 cat > "$TPLDIR/mine.html.tpl" <<'TPL'
 <h1>{{symbols.0.topo_name}}</h1>
@@ -114,30 +113,30 @@ for _ in $(seq 1 20); do
 done
 [ "$up" -eq 1 ] || fail "main server did not come up"
 
-# WP45d — GET /templates/<name> renders the user template fresh.
+# Templates — GET /templates/<name> renders the user template fresh.
 body=$(curl -fsS "http://127.0.0.1:$PORT/templates/mine.html.tpl")
 echo "$body" | grep -q "<h1>" || fail "template not rendered: $body"
 echo "$body" | grep -q "<li>" || fail "template each-block not rendered: $body"
 
-# WP45d — live-reload: edit the template, refresh, expect new content WITHOUT
+# Templates — live-reload: edit the template, refresh, expect new content WITHOUT
 # restarting the server (acceptance criterion).
 echo '<p>EDITED-MARKER</p>' > "$TPLDIR/mine.html.tpl"
 body=$(curl -fsS "http://127.0.0.1:$PORT/templates/mine.html.tpl")
 echo "$body" | grep -q "EDITED-MARKER" \
     || fail "template edit did not take effect on refresh (no rebuild): $body"
 
-# WP45d — path traversal rejected.
+# Templates — path traversal rejected.
 status=$(curl -sS -o /dev/null -w "%{http_code}" \
     "http://127.0.0.1:$PORT/templates/..%2f..%2fetc%2fpasswd" || true)
 case "$status" in 400|404) ;; *) fail "template traversal not rejected: $status";; esac
 
-# WP45d — missing template → 404.
+# Templates — missing template → 404.
 status=$(curl -sS -o /dev/null -w "%{http_code}" \
     "http://127.0.0.1:$PORT/templates/nope.html.tpl")
 [ "$status" = "404" ] || fail "missing template returned $status, expected 404"
 
 # ---------------------------------------------------------------------------
-# WP45c — AI export: stable over >=5 GET requests, JSON schema-valid,
+# AI export: stable over >=5 GET requests, JSON schema-valid,
 # loopback-only, read-only.
 # ---------------------------------------------------------------------------
 up=0
@@ -175,12 +174,12 @@ for i in 1 2 3 4 5; do
         || fail "ai/recent-queries missing queries (iter $i)"
 done
 
-# WP45c — write attempt / unknown route is read-only → 404.
+# AI export — write attempt / unknown route is read-only → 404.
 status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
     -d '{}' "http://127.0.0.1:$AI_PORT/ai/symbols")
 [ "$status" = "404" ] || fail "AI POST returned $status, expected 404 (read-only)"
 
-# WP45c — a query through the MAIN server shows up in recent-queries.
+# AI export — a query through the MAIN server shows up in recent-queries.
 curl -fsS -H 'Content-Type: application/json' \
     -d '{"expr":"sum(matrix)","site":"foo"}' \
     "http://127.0.0.1:$PORT/query" >/dev/null
@@ -188,5 +187,5 @@ rq=$(curl -fsS "http://127.0.0.1:$AI_PORT/ai/recent-queries")
 echo "$rq" | grep -q 'sum(matrix)' \
     || fail "recent-queries did not capture the query: $rq"
 
-echo "topo debug serve WP45c/d/e smoke: OK"
+echo "topo debug serve export/templates smoke: OK"
 exit 0

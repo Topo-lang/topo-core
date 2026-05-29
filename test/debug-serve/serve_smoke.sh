@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Plan 45 Phase 0 — `topo debug serve` smoke test.
+# `topo debug serve` smoke test.
 #
 # Spawns the server with the mock adapter, verifies every documented route
 # returns the expected status and content, and kills the server. POSIX-only;
-# Windows is out of scope for serve mode in Phase 0.
+# Windows is out of scope for serve mode.
 #
 # Environment variables (passed by CTest):
 #   TOPO_DEBUG_BIN   path to topo-debug

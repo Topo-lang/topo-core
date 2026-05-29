@@ -1,4 +1,4 @@
-<!-- Plan 45 WP45d default template: chart caption + raw config.
+<!-- Default template: chart caption + raw config.
      Data model: { method, site, output (Chart.js config JSON) }
      The actual canvas is drawn by the SPA's renderChartWidget; this
      template is the human/LLM-editable caption + config inspector.

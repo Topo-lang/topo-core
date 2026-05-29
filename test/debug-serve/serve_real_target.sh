@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Plan 45 §1 — `topo debug serve` against a real lldb adapter (cpp or rust).
+# `topo debug serve` against a real lldb adapter (cpp or rust).
 #
 # Mirrors serve_smoke.sh but drives the actual `topo-debug-<lang>` adapter
 # against a previously built fixture binary. Verifies the listening-line

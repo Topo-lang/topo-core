@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Plan 45 §1 — WebSocket query smoke for `topo debug serve --port 0`.
+# WebSocket query smoke for `topo debug serve --port 0`.
 #
 # Spawns the server with a real adapter, opens GET /ws (HTTP upgrade), sends
 # a single text frame {"id":"r1","op":"query","expr":...,"site":...} and
