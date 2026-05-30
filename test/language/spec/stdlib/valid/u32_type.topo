@@ -1,4 +1,4 @@
-// Stdlib bridging type — u32 (Plan 38 Batch 2 width-extension)
+// Stdlib bridging type — u32 (width-extension batch)
 // Tests: unsigned 32-bit integer scalar with arity 0.
 
 namespace ids {

@@ -7,7 +7,7 @@
 // recognized by the frontend, how many template parameters they take, and
 // what ABI byte layout the cross-language Functor boundary must produce.
 //
-// Per-language Emitters and topo-check catalogs (Batch 2 PRs) read this table
+// Per-language Emitters and topo-check catalogs read this table
 // to compile/check stdlib uses. The frontend itself uses it for:
 //   - Lexer keyword recognition (TokenKinds.h adds KW_bool, KW_i64, etc.)
 //   - Parser type-position acceptance
@@ -115,7 +115,7 @@ inline bool isStdlibKeyword(const std::string& name) {
     return fromKeyword(name) != TypeId::None;
 }
 
-// Type-parameter arity. For Batch 1:
+// Type-parameter arity. For the core types:
 //   bool / i64 / f64 / string -> 0
 //   optional / slice          -> 1
 // Returns 0 for TypeId::None as well (defensive).

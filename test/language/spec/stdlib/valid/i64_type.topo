@@ -1,4 +1,4 @@
-// Stdlib bridging type — i64 (Plan 38 Batch 1)
+// Stdlib bridging type — i64 (core batch)
 // Tests: signed 64-bit integer scalar with arity 0.
 
 namespace metrics {

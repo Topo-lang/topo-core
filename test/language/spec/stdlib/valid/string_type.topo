@@ -1,4 +1,4 @@
-// Stdlib bridging type — string (Plan 38 Batch 1)
+// Stdlib bridging type — string (core batch)
 // Tests: UTF-8 length-prefixed string with arity 0.
 
 namespace identity {

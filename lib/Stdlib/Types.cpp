@@ -19,7 +19,7 @@ namespace {
 //   array:    caller-computed (N * stride(T)), sentinel size=0
 const std::vector<Entry>& entries() {
     static const std::vector<Entry> kEntries = {
-        // --- Batch 1 ---
+        // --- core types ---
         {TypeId::Bool, "bool", 0, {1, 1}, "boolean (u8 0/1)"},
         {TypeId::I64, "i64", 0, {8, 8}, "signed 64-bit integer (LE)"},
         {TypeId::F64, "f64", 0, {8, 8}, "IEEE-754 binary64 (LE)"},

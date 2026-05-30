@@ -1,4 +1,4 @@
-// Plan 40 Phase 0 — basic debug block with one view and a summary.
+// Basic debug block with one view and a summary.
 // Validates: target type resolution, bare slice expression, summary string.
 
 std::import("cstdint", int32_t);

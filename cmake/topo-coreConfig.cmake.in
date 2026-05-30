@@ -1,6 +1,6 @@
 @PACKAGE_INIT@
 
-# topo-core CMake package config (Plan 39 Phase 1).
+# topo-core CMake package config.
 # Supports component-aware find_package(topo-core COMPONENTS frontend check ...).
 # Recognized components: frontend, check, fmt, transpile, build, lsp, fixtures
 #   - frontend  : Platform, Basic, Lexer, AST, Parser, Sema
@@ -17,11 +17,11 @@
 set(TOPO_CORE_FIXTURES_DIR "${PACKAGE_PREFIX_DIR}/share/topo-core/fixtures")
 set(TOPO_CORE_BUILD_FIXTURES_DIR "${PACKAGE_PREFIX_DIR}/share/topo-core/build-fixtures")
 #
-# Phase 1 scope: TopoCoreTargets.cmake exports the targets whose PUBLIC
+# Current export scope: TopoCoreTargets.cmake exports the targets whose PUBLIC
 # dependency closure stays inside topo-core (frontend + check + fmt). Targets
 # with cross-package PUBLIC deps (Build/Transpile/CheckRunner pulling
-# TopoLang) ship as artifacts but are not in the export set; Phase 2+ wires
-# them in once topo-lang exposes a clean export surface.
+# TopoLang) ship as artifacts but are not in the export set; a later revision
+# wires them in once topo-lang exposes a clean export surface.
 
 # TopoPlatform is a STATIC library whose Process.cpp.o carries unresolved
 # reproc::process::* symbols (PRIVATE link to reproc++). third_party/reproc

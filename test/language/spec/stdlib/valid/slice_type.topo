@@ -1,4 +1,4 @@
-// Stdlib bridging type — slice<T> (Plan 38 Batch 1)
+// Stdlib bridging type — slice<T> (core batch)
 // Tests: generic stdlib type with arity 1; non-owning view.
 
 namespace data {

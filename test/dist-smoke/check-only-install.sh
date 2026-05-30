@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Plan 39 Phase 2 — minimal-dist smoke test.
+# Minimal-dist smoke test.
 #
 # Installs the topo-core-frontend + topo-core-check components into a
 # temporary prefix and asserts:
@@ -22,7 +22,7 @@ trap 'rm -rf "$PREFIX"' EXIT
 echo "minimal-dist smoke: install prefix = ${PREFIX}"
 echo "minimal-dist smoke: build dir       = ${BUILD_DIR}"
 
-# Phase 1 install components: frontend + check.
+# Install components: frontend + check.
 cmake --install "${BUILD_DIR}" --component topo-core-frontend \
       --prefix "${PREFIX}" >/dev/null
 cmake --install "${BUILD_DIR}" --component topo-core-check \
@@ -79,7 +79,7 @@ for H in Transpile Build Format Transform; do
     forbid_dir "${H}"
 done
 
-# ---- Report total installed size for Phase 2 PR description --------
+# ---- Report total installed size -----------------------------------
 TOTAL=$(du -sh "${PREFIX}" | awk '{print $1}')
 LIBSZ=$(du -sh "${PREFIX}/lib/topo-core" 2>/dev/null | awk '{print $1}')
 INCSZ=$(du -sh "${PREFIX}/include/topo" 2>/dev/null | awk '{print $1}')

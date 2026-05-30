@@ -318,7 +318,7 @@
 
 
 # ============================================================================
-# Debug declarations (Plan 40 Phase 0)
+# Debug declarations
 # `debug T { view ... summary ... inactive_region ... render ... }` produces
 # metadata only — zero codegen impact.
 # ============================================================================

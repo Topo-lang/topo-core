@@ -1,4 +1,4 @@
-// Plan 40 Phase 0 — debug block with an inactive_region (grayed mode).
+// Debug block with an inactive_region (grayed mode).
 // Validates: inactive_region grammar; optional grayed/hidden mode keyword.
 
 std::import("cstdint", int32_t);

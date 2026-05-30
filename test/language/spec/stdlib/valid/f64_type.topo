@@ -1,4 +1,4 @@
-// Stdlib bridging type — f64 (Plan 38 Batch 1)
+// Stdlib bridging type — f64 (core batch)
 // Tests: IEEE-754 binary64 scalar with arity 0.
 
 namespace math {

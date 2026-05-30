@@ -1,4 +1,4 @@
-// Stdlib bridging type — f32 (Plan 38 Batch 2 width-extension)
+// Stdlib bridging type — f32 (width-extension batch)
 // Tests: IEEE-754 binary32 scalar with arity 0.
 
 namespace graphics {

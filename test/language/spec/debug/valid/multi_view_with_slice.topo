@@ -1,4 +1,4 @@
-// Plan 40 Phase 0 — multiple views including a sliced view expression.
+// Multiple views including a sliced view expression.
 // Validates: multiple view declarations; field[start..end] form.
 
 std::import("cstdint", int32_t);

@@ -1363,7 +1363,7 @@ TEST_F(TranspileEquivalenceTest, StdlibTypesRustEmitter) {
     RustEmitter emitter;
     std::string code = emitter.emit(mod).code;
 
-    // String-assert the §4 contract appears in the emitted signature.
+    // String-assert the stdlib type-mapping contract appears in the emitted signature.
     EXPECT_NE(code.find(
                   "fn boundary("
                   "id: i64, "
@@ -1480,16 +1480,16 @@ TEST_F(TranspileEquivalenceTest, StdlibTypesCrossLanguageMapping) {
         std::string code = emitter.emit(mod).code;
         EXPECT_NE(code.find("std::optional<std::int64_t> boundary("),
                   std::string::npos)
-            << "C++ return-type drift from §4.\nGenerated:\n" << code;
+            << "C++ return-type drift from the stdlib type mapping.\nGenerated:\n" << code;
         EXPECT_NE(code.find("std::int64_t id"), std::string::npos)
-            << "C++ i64 param drift from §4.\nGenerated:\n" << code;
+            << "C++ i64 param drift from the stdlib type mapping.\nGenerated:\n" << code;
         EXPECT_NE(code.find("std::string_view name"), std::string::npos)
-            << "C++ string param drift from §4.\nGenerated:\n" << code;
+            << "C++ string param drift from the stdlib type mapping.\nGenerated:\n" << code;
         EXPECT_NE(code.find("std::optional<bool> flags"), std::string::npos)
-            << "C++ optional<bool> drift from §4.\nGenerated:\n" << code;
+            << "C++ optional<bool> drift from the stdlib type mapping.\nGenerated:\n" << code;
         EXPECT_NE(code.find("topo::span<const double> values"),
                   std::string::npos)
-            << "C++ slice<f64> drift from §4.\nGenerated:\n" << code;
+            << "C++ slice<f64> drift from the stdlib type mapping.\nGenerated:\n" << code;
         // Include preamble — all 4 header-bearing types are present.
         EXPECT_NE(code.find("#include <cstdint>"), std::string::npos);
         EXPECT_NE(code.find("#include <optional>"), std::string::npos);
@@ -1515,7 +1515,7 @@ TEST_F(TranspileEquivalenceTest, StdlibTypesCrossLanguageMapping) {
                       "values: &[f64]"
                       ") -> Option<i64>"),
                   std::string::npos)
-            << "Rust signature drift from §4.\nGenerated:\n" << code;
+            << "Rust signature drift from the stdlib type mapping.\nGenerated:\n" << code;
     }
 
     // -----------------------------------------------------------------
@@ -1532,7 +1532,7 @@ TEST_F(TranspileEquivalenceTest, StdlibTypesCrossLanguageMapping) {
                             "flags: bool | None, values: list[float])"
                             " -> int | None:"),
                   std::string::npos)
-            << "Python signature drift from §4.\nGenerated:\n" << code;
+            << "Python signature drift from the stdlib type mapping.\nGenerated:\n" << code;
     }
 
     // -----------------------------------------------------------------
@@ -1552,7 +1552,7 @@ TEST_F(TranspileEquivalenceTest, StdlibTypesCrossLanguageMapping) {
                             "values: readonly number[]"
                             "): bigint | null"),
                   std::string::npos)
-            << "V8Codegen signature drift from §4.\nGenerated:\n" << code;
+            << "V8Codegen signature drift from the stdlib type mapping.\nGenerated:\n" << code;
     }
 
     // -----------------------------------------------------------------
@@ -1576,7 +1576,7 @@ TEST_F(TranspileEquivalenceTest, StdlibTypesCrossLanguageMapping) {
                       "java.util.List<Double> values"
                       ")"),
                   std::string::npos)
-            << "Java signature drift from §4.\nGenerated:\n" << code;
+            << "Java signature drift from the stdlib type mapping.\nGenerated:\n" << code;
     }
 }
 
@@ -2306,7 +2306,7 @@ TEST_F(TranspileEquivalenceTest, V8CodegenInheritanceGenericsPrecedeExtends) {
 //
 // A hand-built Model would self-confirm the emitters only — this test
 // fails if the extractor's lifted JSON diverges from what the topo-core
-// deserializer expects, which is the whole point of Track T.
+// deserializer expects, which is the whole point of this end-to-end test.
 // =====================================================================
 
 #ifndef TOPO_TRANSPILE_CLI_BINARY

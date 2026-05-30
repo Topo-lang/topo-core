@@ -1,4 +1,4 @@
-// Stdlib bridging type — i32 (Plan 38 Batch 2 width-extension)
+// Stdlib bridging type — i32 (width-extension batch)
 // Tests: signed 32-bit integer scalar with arity 0.
 
 namespace counters {
