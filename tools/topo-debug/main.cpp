@@ -1865,9 +1865,15 @@ int runQuerySubcommand(const CliConfig& cfg, const std::string& argv0) {
 // ---------- serve subcommand ----------
 
 static topo::debug_server::HttpServer* g_runningServer = nullptr;
+static topo::debug_server::HttpServer* g_aiExportServer = nullptr;
 
 extern "C" void onTerminationSignal(int) {
+    // Request stop on BOTH servers. requestStop() only does async-signal-safe
+    // work (an atomic store + a write() to a self-pipe), so this is safe in a
+    // signal handler. Signalling the AI-export server too means it stops even
+    // if the main loop has already exited and is waiting to join its thread.
     if (g_runningServer) g_runningServer->requestStop();
+    if (g_aiExportServer) g_aiExportServer->requestStop();
 }
 
 // Load the entire debug-meta file into memory so each GET /dbg.json is a
@@ -2680,6 +2686,7 @@ int runServeSubcommand(const CliConfig& cfg, const std::string& argv0) {
     }
 
     g_runningServer = &server;
+    g_aiExportServer = aiServer ? aiServer.get() : nullptr;
     std::signal(SIGINT, onTerminationSignal);
     std::signal(SIGTERM, onTerminationSignal);
 #ifdef SIGPIPE
@@ -2751,6 +2758,7 @@ int runServeSubcommand(const CliConfig& cfg, const std::string& argv0) {
     }
 
     g_runningServer = nullptr;
+    g_aiExportServer = nullptr;
     return rc;
 #endif // _WIN32
 }

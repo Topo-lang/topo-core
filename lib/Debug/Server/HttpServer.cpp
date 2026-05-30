@@ -21,6 +21,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -51,6 +52,13 @@ struct HttpServer::Impl {
     std::atomic<bool> stopRequested{false};
 #ifndef _WIN32
     int listenerFd = -1;
+    // Self-pipe: requestStop() (including from a signal handler) writes one byte
+    // to wakeWriteFd; the accept loop poll()s wakeReadFd alongside the listener
+    // so it wakes promptly on stop instead of relying on close() to interrupt a
+    // blocked accept() — which is unreliable cross-thread / cross-context on
+    // Linux (the root cause of the CI SIGTERM hang).
+    int wakeReadFd = -1;
+    int wakeWriteFd = -1;
 #endif
 
     static std::string routeKey(const std::string& method, const std::string& path) {
@@ -222,6 +230,8 @@ HttpServer::HttpServer(std::string host, uint16_t port)
 HttpServer::~HttpServer() {
 #ifndef _WIN32
     if (impl_->listenerFd >= 0) ::close(impl_->listenerFd);
+    if (impl_->wakeReadFd >= 0) ::close(impl_->wakeReadFd);
+    if (impl_->wakeWriteFd >= 0) ::close(impl_->wakeWriteFd);
 #endif
 }
 
@@ -244,11 +254,23 @@ uint16_t HttpServer::actualPort() const {
 void HttpServer::requestStop() {
     impl_->stopRequested.store(true);
 #ifndef _WIN32
-    // Closing the listener wakes a blocked accept() with EBADF.
-    int fd = impl_->listenerFd;
-    if (fd >= 0) {
-        impl_->listenerFd = -1;
-        ::close(fd);
+    // Wake the accept loop via the self-pipe. write() is async-signal-safe, so
+    // this is safe to call from a SIGTERM/SIGINT handler. We deliberately do NOT
+    // close the listener here: poll() needs a valid listener fd, and closing it
+    // from another thread/handler races the accept loop. The listener is closed
+    // in the destructor.
+    if (impl_->wakeWriteFd >= 0) {
+        const char b = 1;
+        ssize_t n = ::write(impl_->wakeWriteFd, &b, 1);
+        (void)n;  // best-effort; a full non-blocking pipe already means a wake is pending
+    } else {
+        // Fallback when the self-pipe could not be created: close the listener
+        // to interrupt accept() (legacy behavior).
+        int fd = impl_->listenerFd;
+        if (fd >= 0) {
+            impl_->listenerFd = -1;
+            ::close(fd);
+        }
     }
 #endif
 }
@@ -290,6 +312,23 @@ int HttpServer::run(std::string& listeningAddr, std::function<void()> onListen) 
     }
     impl_->listenerFd = fd;
 
+    // Self-pipe for prompt, signal-safe wakeup of the accept loop on stop. If
+    // pipe creation fails we leave the fds at -1 and requestStop() falls back to
+    // closing the listener.
+    {
+        int wp[2];
+        if (::pipe(wp) == 0) {
+            impl_->wakeReadFd = wp[0];
+            impl_->wakeWriteFd = wp[1];
+            for (int wfd : {impl_->wakeReadFd, impl_->wakeWriteFd}) {
+                int fl = ::fcntl(wfd, F_GETFL, 0);
+                if (fl >= 0) ::fcntl(wfd, F_SETFL, fl | O_NONBLOCK);
+                int fdFlags = ::fcntl(wfd, F_GETFD, 0);
+                if (fdFlags >= 0) ::fcntl(wfd, F_SETFD, fdFlags | FD_CLOEXEC);
+            }
+        }
+    }
+
     // when the caller requested port 0, resolve the OS-assigned
     // port via getsockname() so `actualPort()` reads correctly and the
     // logging line below names the real port. Tests rely on this to grab a
@@ -311,6 +350,39 @@ int HttpServer::run(std::string& listeningAddr, std::function<void()> onListen) 
     if (onListen) onListen();
 
     while (!impl_->stopRequested.load()) {
+        // Wait for either an incoming connection or a stop wakeup. poll() (rather
+        // than a bare blocking accept) lets requestStop() — including from a
+        // signal handler — wake us immediately via the self-pipe, instead of
+        // depending on close() to interrupt accept() (unreliable on Linux).
+        struct pollfd pfds[2];
+        pfds[0].fd = impl_->listenerFd;
+        pfds[0].events = POLLIN;
+        pfds[0].revents = 0;
+        nfds_t nfds = 1;
+        if (impl_->wakeReadFd >= 0) {
+            pfds[1].fd = impl_->wakeReadFd;
+            pfds[1].events = POLLIN;
+            pfds[1].revents = 0;
+            nfds = 2;
+        }
+        int pr = ::poll(pfds, nfds, -1);
+        if (pr < 0) {
+            if (errno == EINTR) continue;
+            if (impl_->stopRequested.load()) break;
+            std::fprintf(stderr, "topo-debug serve: poll failed: %s\n", std::strerror(errno));
+            break;
+        }
+        if (impl_->stopRequested.load()) break;
+        if (nfds == 2 && (pfds[1].revents & POLLIN)) {
+            // Drain the wake pipe; the stopRequested check is the real exit gate,
+            // so we just clear the readable state and re-loop.
+            char drain[64];
+            while (::read(impl_->wakeReadFd, drain, sizeof(drain)) > 0) {
+            }
+            if (impl_->stopRequested.load()) break;
+        }
+        if (!(pfds[0].revents & POLLIN)) continue;
+
         sockaddr_in cli{};
         socklen_t cliLen = sizeof(cli);
         int conn = ::accept(impl_->listenerFd, reinterpret_cast<sockaddr*>(&cli), &cliLen);
