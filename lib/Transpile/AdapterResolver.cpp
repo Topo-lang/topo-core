@@ -47,7 +47,7 @@ StmtPtr cloneStmt(const Stmt& s) {
 //
 // The TranspileModelJson TypeNode/Parameter (de)serializers are file-local
 // statics, so the manifest parser carries its own minimal TypeNode reader.
-// It covers exactly the fields the §3.3 signature-consistency check compares
+// It covers exactly the fields the signature-consistency check compares
 // (nameParts, isConst, ownership, modifier, templateArgs).
 
 TypeNode parseManifestTypeNode(const nlohmann::json& j) {
@@ -75,7 +75,7 @@ TypeNode parseManifestTypeNode(const nlohmann::json& j) {
     return t;
 }
 
-// §3.4 source override priority: tpm > topo-app > builtin. Higher = wins.
+// Source override priority: tpm > topo-app > builtin. Higher = wins.
 int provenanceRank(AdapterProvenance p) {
     switch (p) {
     case AdapterProvenance::Tpm: return 3;
@@ -85,7 +85,7 @@ int provenanceRank(AdapterProvenance p) {
     return 0;
 }
 
-// TypeNode structural equality for the §3.3 signature-consistency check.
+// TypeNode structural equality for the signature-consistency check.
 // Compares the observable shape (name parts, modifier, ownership, const,
 // template args) — enough to reject a signature-drifted adapter.
 bool typeEqual(const TypeNode& a, const TypeNode& b) {
@@ -100,8 +100,8 @@ bool typeEqual(const TypeNode& a, const TypeNode& b) {
     return true;
 }
 
-// §3.3: the adapter's declared signature must match the leaf's FnDecl
-// signature — return type + positional parameter types.
+// Signature-consistency check: the adapter's declared signature must match the
+// leaf's FnDecl signature — return type + positional parameter types.
 bool signatureMatches(const AdapterEntry& entry, const TranspileFunction& leaf) {
     if (!typeEqual(entry.signature.returnType, leaf.returnType)) return false;
     if (entry.signature.params.size() != leaf.params.size()) return false;
@@ -116,7 +116,7 @@ bool signatureMatches(const AdapterEntry& entry, const TranspileFunction& leaf) 
 // Replace the M2 unresolved marker on `fn` with a precise degradation
 // description, then install a placeholder body (a single ExprStmt wrapping
 // an UnsupportedExpr). Mirrors the existing unsupported / fidelity mechanism
-// (adapter-model.md §3.3).
+// (the signature-consistency degradation path).
 void degradeLeaf(TranspileFunction& fn, const std::string& reason) {
     fn.unsupported.erase(
         std::remove(fn.unsupported.begin(), fn.unsupported.end(),
@@ -276,7 +276,7 @@ namespace {
 
 // One builtin entry for every target language: a leaf whose body is the same
 // language-agnostic Stmt sequence regardless of `--to`. The toolchain ships
-// these compiled-in (no manifest file), per adapter-model.md §2.2.
+// these compiled-in (no manifest file).
 
 // `topo::identity(x) -> T` — returns its single parameter unchanged.
 AdapterEntry builtinIdentity(HostLanguage lang) {
@@ -284,7 +284,7 @@ AdapterEntry builtinIdentity(HostLanguage lang) {
     e.topoFunction = "topo::identity";
     e.targetLanguage = lang;
     e.provenance = AdapterProvenance::Builtin;
-    // signature: T identity(T x). The resolver's §3.3 check compares the leaf
+    // signature: T identity(T x). The resolver's signature-consistency check compares the leaf
     // FnDecl signature against this; identity is generic over `T`, so the
     // builtin declares a `T` type name that matches a leaf declared the same
     // way. (A leaf with a concrete type still matches only if it too uses the
@@ -331,7 +331,7 @@ std::vector<AdapterEntry> BuiltinAdapterSource::enumerate() {
     return out;
 }
 
-// --- Registry assembly (adapter-model.md "Behavior" step 2) -----------------
+// --- Registry assembly (resolution behavior, step 2) ------------------------
 
 AdapterRegistry assembleAdapterRegistry(const std::string& topoAppManifestPath,
                                         std::vector<std::string>& outWarnings) {
@@ -391,10 +391,10 @@ ResolveStats AdapterResolver::resolve(TranspileModule& module,
         if (!isUnresolvedLeaf(fn)) continue;
         ++stats.leavesSeen;
 
-        // §3.2 step 1: query the registry.
+        // Resolution step 1: query the registry.
         auto candidates = registry_.lookup(fn.qualifiedName, targetLanguage);
 
-        // §3.2 step 2: zero candidates → missing.
+        // Resolution step 2: zero candidates → missing.
         if (candidates.empty()) {
             std::string reason = "no adapter for leaf '" + fn.qualifiedName +
                                  "' targeting " + langName(targetLanguage);
@@ -404,9 +404,9 @@ ResolveStats AdapterResolver::resolve(TranspileModule& module,
             continue;
         }
 
-        // §3.2 step 3+4 combined: select the highest-priority candidate that
-        // ALSO satisfies the signature-consistency check (§3.3). The contract
-        // (adapter-model.md §3.4) is "among compatible candidates, pick
+        // Resolution step 3+4 combined: select the highest-priority candidate that
+        // ALSO satisfies the signature-consistency check. The contract
+        // is "among compatible candidates, pick
         // highest priority" — so a higher-priority candidate whose signature
         // does not match must not block a lower-priority compatible one. Walk
         // rank groups top-down; on each group, drop signature-mismatched
@@ -450,7 +450,7 @@ ResolveStats AdapterResolver::resolve(TranspileModule& module,
             }
             if (compatible.size() > 1) {
                 // True ambiguity — multiple signature-matching candidates at
-                // the same priority. No objective tie-break (§3.4).
+                // the same priority. No objective tie-break.
                 ambiguous = true;
                 ambiguityReason =
                     "ambiguous adapter for leaf '" + fn.qualifiedName +

@@ -63,7 +63,7 @@ std::string backendToolName(HostLanguage language);
 /// LLVM-cpp / LLVM-rust / LLVM-mixed / Python / TypeScript sub-schemas
 /// list their accepted keys here for documentation and forward
 /// reference, but the deserializer keeps the historical silent-tolerant
-/// behaviour for them (see backend-protocol.md "Failure modes").
+/// behaviour for them (unknown-key tolerance for non-JVM backends).
 const std::unordered_set<std::string>& knownBackendExtrasKeys(HostLanguage language);
 
 /// Whether unknown `backendExtras` keys are rejected for the given

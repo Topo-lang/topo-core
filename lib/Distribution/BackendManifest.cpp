@@ -33,7 +33,7 @@ std::vector<std::string> BackendManifest::payloadPaths() const {
 namespace {
 
 /// A package-relative path is valid only when it neither escapes the package
-/// root nor is absolute (spec §1 `[binaries]`).
+/// root nor is absolute (the `[binaries]` containment rule).
 bool isContainedRelPath(const std::string& p) {
     if (p.empty()) return false;
     if (p.front() == '/' || p.front() == '\\') return false;

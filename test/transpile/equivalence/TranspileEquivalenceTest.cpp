@@ -1199,7 +1199,8 @@ TEST_F(TranspileEquivalenceTest, GCDAlgorithm) {
     fn.params = {makeParam("int", "a"), makeParam("int", "b")};
 
     // Parameters reassigned directly — the Rust emitter detects this and emits
-    // `mut a: i32, mut b: i32` (issue: rust-emitter-parameter-reassignment-immutable).
+    // `mut a: i32, mut b: i32` (Rust params are immutable by default; without
+    // `mut` rustc raises E0384).
     // while (b != 0) { int t = b; b = a % b; a = t; } return a;
     auto whileStmt = std::make_unique<WhileStmt>();
     auto cond = std::make_unique<BinaryOpExpr>();
@@ -2382,11 +2383,11 @@ TEST(TranspileFromTypeScript, LiftAndRetargetToCppAndRust) {
     // self-update for-incrementor, calls, varref, and — deliberately —
     // bare INTEGER literals in `number`(→f64) context. These are the
     // natural literals a TS author writes (`let s: number = 0;`) and are
-    // the exact shape that regression-pins issue
-    // rust-emitter-integer-literal-in-f64-context: before the fix the
-    // Rust leg emitted `let mut s: f64 = 0;` (rustc E0308/E0277, leg
-    // failed); after, the f64-literal coercion makes the lifted Rust
-    // compile and run. Float-literal coverage lives in the other
+    // the exact shape that regression-pins integer-literal coercion in
+    // f64 context: before the fix the Rust leg emitted
+    // `let mut s: f64 = 0;` (rustc E0308/E0277, leg failed); after, the
+    // f64-literal coercion makes the lifted Rust compile and run.
+    // Float-literal coverage lives in the other
     // equivalence fixtures; here integers are the point.
     fs::path tsFile = dir / "calc.ts";
     {
@@ -2603,8 +2604,8 @@ TEST(TranspileFromCpp, UniquePtrBecomesRustBox) {
 // =====================================================================
 // Real-world ownership: same shape as the test above, but the C++ source
 // uses a genuine `#include <memory>` rather than an in-TU std stub. This
-// pins the verification gate of cpp-extractor-no-system-include-paths.md:
-// topo-extract-cpp must wire libclang to the host SDK / bundled resource
+// pins the verification gate for the cpp-extractor system-include-path
+// handling: topo-extract-cpp must wire libclang to the host SDK / bundled resource
 // dir so stdlib headers resolve, otherwise `std::unique_ptr<Foo>` collapses
 // to `int` under clang error-recovery and ownership is silently lost.
 //
@@ -3099,8 +3100,8 @@ TEST(TranspileFromRust, LiftAndRetargetToCppAndJava) {
 // choice union, distinct from the stdlib *tagged* `union<tag:, v1:, ...>`
 // (which rides `recordFields`).
 //
-// The C++/Rust/Java emitters have no positional-union bound path yet —
-// see issue `non-python-emitters-no-positional-union-bound.md` — so this
+// The C++/Rust/Java emitters have no positional-union bound path yet
+// (non-Python emitters lack positional-union bound support) — so this
 // cross-host check covers the two hosts whose surface union syntax
 // faithfully expresses the constraint.
 // =====================================================================
@@ -3423,8 +3424,8 @@ TEST(TranspileFromTopoSource, UnresolvedLeafDegradesWithWarningAndExit1) {
          "--output", outDir.string(), topoFile.string()},
         30000);
 
-    // Exit 1: unresolved leaves produce unsupported constructs (cli.md
-    // "Exit Codes" — unsupportedCount > 0).
+    // Exit 1: unresolved leaves produce unsupported constructs (the CLI
+    // exit-code table — unsupportedCount > 0).
     EXPECT_EQ(r.exitCode, 1)
         << "expected exit 1 for a .topo with unresolvable leaves; got "
         << r.exitCode << "\n" << r.stderrOutput;

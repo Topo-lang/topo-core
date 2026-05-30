@@ -424,7 +424,7 @@ TEST(CompletenessCheck, EmptyInputs) {
 }
 
 // =============================================================================
-// Adversarial / negative fixtures (issue: checker-completeness-no-negative-fixtures).
+// Adversarial / negative fixtures (close a gap: completeness check had no negative coverage).
 // The existing AllMatched / BindingTargetSkipped / IgnoreVisibilitySkipped fixtures
 // establish the happy-path contract. The three tests below pin the *error* side
 // of that contract — if a regression turns checkCompleteness into a silent no-op,

@@ -16,7 +16,7 @@ const char* kCatPath = "/bin/cat";
 
 using topo::platform::PipedProcess;
 
-// Regression test for transpile-driver-extractor-stdin-deadlock.md:
+// Regression test for the transpile-driver extractor stdin deadlock:
 // Before closeStdin() existed, writing to a child that reads stdin to EOF
 // and then reading its stdout would deadlock. cat is the minimal reproducer
 // because it reads stdin to EOF before writing anything to stdout.

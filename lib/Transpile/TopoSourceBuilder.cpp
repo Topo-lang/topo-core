@@ -368,8 +368,8 @@ private:
             // The fn-block call grammar does not carry argument expressions
             // on OperationDecl (StageAnalysis tracks callee names only); the
             // naive orchestration emits an argument-free call. Argument
-            // threading is a backend concern (the roadmap pins this path as
-            // *naive orchestration*).
+            // threading is a backend concern; this path is scoped to
+            // *naive orchestration* only.
 
             if (op.returnBinding && op.returnBinding->isSingleValue) {
                 // `f() -> x` → declare x = f(). The binding's declared type is
@@ -406,8 +406,8 @@ private:
     // `return <lastNode>`.
     void buildPipelineBody(const FnLogicBlock& block, TranspileFunction& fn) {
         // Collect node order: declaration order of edge endpoints, terminal
-        // last. This is a naive orchestration, not a real topo sort — the
-        // roadmap explicitly scopes this path to naive DAG orchestration.
+        // last. This is a naive orchestration, not a real topo sort — this
+        // path is intentionally scoped to naive DAG orchestration.
         std::vector<std::string> order;
         std::string terminalNode;
         auto seen = [&](const std::string& n) {

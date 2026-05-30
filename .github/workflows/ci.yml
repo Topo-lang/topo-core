@@ -106,7 +106,7 @@ jobs:
           ./build/smoke
 
   # ── Standalone TESTS=ON+WITH_LANG=ON verification ────────
-  # Closes split-topo-core-deferred-cleanup.md: the standalone test tree
+  # Covers deferred standalone-split cleanup: the standalone test tree
   # gates language-plugin-dependent suites behind `TOPO_CORE_WITH_LANG`
   # (i.e. find_package(topo-lang) success) plus the per-language
   # Transpile/Plugin targets shipped by topo-lang-{cpp,rust,java,python}.

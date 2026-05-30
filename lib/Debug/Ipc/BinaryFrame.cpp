@@ -23,7 +23,7 @@ inline void storeU32BE(uint8_t* p, uint32_t v) {
 }
 
 // Little-endian load/store for everything else (frame_id, payload_len, ShmRef
-// fields). Matches §2.5: "Endianness: little-endian on the wire" — the magic
+// fields). The debug IPC wire format is little-endian — the magic
 // is the lone exception so byte 0 routes deterministically.
 inline uint32_t loadU32LE(const uint8_t* p) {
     return static_cast<uint32_t>(p[0]) |

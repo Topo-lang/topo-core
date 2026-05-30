@@ -82,9 +82,9 @@ bool LSPBridge::startProcess(const std::string& exe, const std::vector<std::stri
     // The legacy `rootUri` alone is insufficient for them (clangd tolerates
     // it, pyright does not). Send both so symbol queries resolve the
     // workspace on every backend.
-    // (issue: lsp-bridge-happy-path-tests-skip-despite-langserver-installed
-    //  — without this, PyrightBridge.findDefinition never resolves fixture
-    //  symbols and the happy-path tests skip after the full readiness wait.)
+    // (Without this, PyrightBridge.findDefinition never resolves fixture
+    //  symbols and the happy-path tests skip after the full readiness wait
+    //  even with a language server installed.)
     std::string folderName = "workspace";
     if (!rootUri.empty()) {
         std::string trimmed = rootUri;
@@ -112,8 +112,7 @@ bool LSPBridge::startProcess(const std::string& exe, const std::vector<std::stri
     // that as a successful handshake leaves the bridge wrongly "available"
     // talking to a server that never initialized. Require a real result
     // object so a malformed/incomplete handshake fails start() cleanly.
-    // (issue: lsp-bridge-malformed-harness-untracked-after-issue-archived —
-    //  surfaced by the fake-langserver harness.)
+    // (Surfaced by the fake-langserver test harness.)
     if (!response || !response->is_object() || response->empty()) {
         std::cerr << logPrefix_ << " initialize failed (no/invalid result)\n";
         stop();
@@ -387,8 +386,7 @@ std::optional<json> LSPBridge::readMessage() {
             // thread via an uncaught std::invalid_argument/out_of_range from
             // std::stoi (that std::terminate's the whole process). Treat a
             // malformed header as connection loss instead.
-            // (issue: lsp-bridge-malformed-harness-untracked-after-issue-archived
-            //  — surfaced by the fake-langserver "bad-length" mode.)
+            // (Surfaced by the fake-langserver "bad-length" mode.)
             try {
                 contentLength = std::stoi(line.substr(prefix.size()));
             } catch (const std::exception&) {
@@ -432,9 +430,8 @@ void LSPBridge::readerLoop() {
         // malformed response whose `id` is a string/object would throw an
         // uncaught nlohmann::json::type_error from get<int>() and
         // std::terminate the whole process on this reader thread — ignore
-        // such frames instead. (issue:
-        // lsp-bridge-malformed-harness-untracked-after-issue-archived —
-        // surfaced by the fake-langserver "type-mismatch" mode.)
+        // such frames instead. (Surfaced by the fake-langserver
+        // "type-mismatch" mode.)
         if (msg->contains("id") && (*msg)["id"].is_number_integer()) {
             int id = (*msg)["id"].get<int>();
             {

@@ -113,8 +113,8 @@ if(TOPO_CORE_WITH_LANG)
     topo_apply_std_pch(topo-core-tests)
     # DISCOVERY_TIMEOUT 30: the CMake default is 5s, too tight for a heavily
     # linked binary when post-link discovery competes with concurrent link
-    # jobs on a loaded machine (issue
-    # topo-lsp-server-tests-gtest-discovery-timeout-flake — project-wide).
+    # jobs on a loaded machine — under-budgeting it causes flaky
+    # gtest-discovery timeouts at test-registration time.
     gtest_discover_tests(topo-core-tests
         DISCOVERY_TIMEOUT 30
         PROPERTIES LABELS "toolchain;core" TIMEOUT 120)
@@ -947,7 +947,7 @@ if(Python3_FOUND AND NOT WIN32)
         # (probed at configure time) so this acceptance actually runs
         # where one exists; fall back to the bundled lldb otherwise — the
         # driver still self-skips cleanly there (honest skip, never a
-        # phantom pass). See bundled-lldb-no-python-scripting issue.
+        # phantom pass) when the bundled lldb has no Python scripting.
         set(_BUNDLED_LLDB "${PROJECT_SOURCE_DIR}/topo-llvm/llvm-dev/bin/lldb")
         set(_FMT_LLDB "${_BUNDLED_LLDB}")
         find_program(_SYS_LLDB NAMES lldb)
@@ -2854,7 +2854,8 @@ if(TARGET topo-debug-python)
     # group on it and, when absent, register one SKIP-with-reason test
     # (same SKIPPED: / SKIP_REGULAR_EXPRESSION idiom used elsewhere in
     # this file) so the gap stays visible as a skip, not a silent drop.
-    # Issue: topo-debug-python-e2e-suite-fails-without-debugpy.
+    # Without this gate the whole python e2e suite hard-fails when
+    # debugpy is not installed.
     if(TOPO_DEBUG_PYTHON_HAS_DEBUGPY)
     add_test(NAME e2e.topo-debug-python.stdlib_bridge_uuid
         COMMAND ${_TOPO_DEBUG_BIN} query "u"
@@ -2948,7 +2949,8 @@ if(TARGET topo-debug-python)
     # regression. Gate the block on the configure-recorded
     # TOPO_DEBUG_PYTHON_HAS_DEBUGPY; when absent, register a single
     # explicit skip-with-reason instead of dropping or failing.
-    # Issue: topo-debug-python-e2e-suite-fails-without-debugpy.
+    # Without this gate the python e2e suite hard-fails when debugpy
+    # is not installed.
     if(TOPO_DEBUG_PYTHON_HAS_DEBUGPY)
 
     # project_simple — single Python list `data` of length 8 with two

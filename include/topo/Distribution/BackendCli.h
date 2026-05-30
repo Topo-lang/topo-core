@@ -14,12 +14,12 @@
 namespace topo::dist {
 
 /// The topo-core release this build identifies as, for `core_compat`
-/// validation. SemVer; sourced from the project version (CLAUDE.md "v4.0").
+/// validation. SemVer; sourced from the project version (v4.0).
 inline constexpr const char* kTopoCoreVersion = "4.0.0";
 
 /// Run `topo backend <args...>`. `args` excludes the leading `topo` and
 /// `backend` tokens — i.e. args[0] is the subcommand. Returns the process
-/// exit code per the spec §2 exit-code table.
+/// exit code per the backend CLI exit-code table.
 int runBackendCli(const std::vector<std::string>& args);
 
 /// Print the `topo backend` usage block to stderr.

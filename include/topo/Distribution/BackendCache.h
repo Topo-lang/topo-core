@@ -3,7 +3,7 @@
 
 /// Local backend cache management — the `~/.topo/backends/` tree.
 ///
-/// Layout (spec §2 "Local cache layout"):
+/// Local cache layout:
 ///
 ///   ~/.topo/backends/
 ///     <backend>/
@@ -36,7 +36,7 @@ struct InstalledBackend {
 /// Outcome of a transactional install.
 struct InstallOutcome {
     bool ok = false;
-    int exitCode = 0;       // spec §2 exit-code table
+    int exitCode = 0;       // backend CLI exit-code table
     std::string error;
     std::string installedPath;  // <version> dir, set when ok
 };

@@ -112,7 +112,7 @@ TEST(TempFile, ReleaseSuppressesCleanup) {
 
 // Uniqueness across multiple producer threads sharing the same stem +
 // extension. This is the regression that backs the AppStaticAnalyze
-// fix (audit issue topo-lang-cpp-app-static-wrapped-temp-collision):
+// wrapped-temp-file collision fix:
 // concurrent CppDriver compile jobs both produce a wrapped temp
 // source from the same input basename, and the atomic counter inside
 // TempFile must keep their paths distinct so neither subprocess

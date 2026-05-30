@@ -519,13 +519,11 @@ bool TranspileDriver::extractFunctions(HostLanguage lang,
         // Per-extractor degradation signal — currently emitted by
         // topo-extract-java when JDT binding resolution OOMs and the
         // process falls back to binding-disabled parsing for the rest
-        // of the run. Audit issue:
-        // topo-extract-java-oom-degradation-is-sticky-but-untested.
-        // Surfaced through `errors` so the user-visible topo-check /
-        // topo-transpile report does not silently treat a degraded
-        // pass as a high-fidelity verification. Per
-        // no-silent-degradation principle this is reported even on
-        // successful extraction; callers may choose warn vs fail.
+        // of the run. Surfaced through `errors` so the user-visible
+        // topo-check / topo-transpile report does not silently treat a
+        // degraded pass as a high-fidelity verification; to avoid silent
+        // degradation this is reported even on successful extraction;
+        // callers may choose warn vs fail.
         if (responseJson.contains("runDegraded") &&
             responseJson["runDegraded"].is_boolean() &&
             responseJson["runDegraded"].get<bool>()) {

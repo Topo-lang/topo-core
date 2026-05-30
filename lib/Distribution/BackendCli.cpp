@@ -23,7 +23,7 @@ namespace topo::dist {
 
 namespace {
 
-// ── exit codes (spec §2) ─────────────────────────────────────────
+// ── exit codes (backend CLI exit-code table) ─────────────────────
 // Code 4 (compatibility error) is produced inside BackendCache as
 // InstallOutcome.exitCode and propagated verbatim, so it has no CLI-level
 // constant here.

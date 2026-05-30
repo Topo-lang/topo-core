@@ -21,7 +21,7 @@ struct TranspileRequest {
     std::vector<std::string> functions;     // empty = all declared functions
     std::string pipelineName;               // empty = no pipeline filter
 
-    // `.topo`-source mode (roadmap milestone M4). When true, the source side
+    // `.topo`-source mode. When true, the source side
     // is the `.topo` file itself: the driver builds the TranspileModule from
     // the parsed `.topo` AST via TopoSourceBuilder (composite-function bodies
     // generated from logic blocks) and fills leaf functions via the

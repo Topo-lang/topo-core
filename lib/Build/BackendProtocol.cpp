@@ -489,17 +489,17 @@ std::string backendToolName(HostLanguage language) {
 }
 
 // ===================================================================
-// backendExtras key registry (per the topo-build backend-protocol
-// spec — section "Failure modes" — which enumerates the keys each
-// backend tolerates / rejects in the JSON request).
+// backendExtras key registry: enumerates the keys each backend
+// tolerates / rejects in the JSON request, per the topo-build
+// backend protocol's unknown-key handling rules.
 // ===================================================================
 //
 // Unknown-key rejection at deserialize is JVM-only today (see
 // `backendExtrasRejectsUnknown`). Every other backend listed below
 // keeps the historical silent-tolerant behaviour for *unknown* keys,
 // but per-value type validation for *known* keys is enforced inside
-// each backend's main.cpp before any compile/check step runs (see
-// `backend-extras-subschema-validation-gap-for-5-backends` — archived).
+// each backend's main.cpp before any compile/check step runs (the
+// non-JVM backends lack deserialize-time subschema validation).
 
 const std::unordered_set<std::string>& knownBackendExtrasKeys(HostLanguage language) {
     static const std::unordered_set<std::string> kJvmKeys = {

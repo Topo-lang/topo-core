@@ -324,7 +324,7 @@ TEST(VisibilityCheck, GlobalScopePrivate_GlobalCallerPasses) {
 
 // =============================================================================
 // Cross-module / cross-TU adversarial fixtures
-// (issue: checker-visibility-weak-cross-module-escape-tests).
+// (close a gap: the visibility checker lacked cross-module escape coverage).
 //
 // The current checkVisibilityConsistency API operates on a *flat* CallEdge list
 // and a single SymbolTable — there is no first-class "module" or TU identifier.

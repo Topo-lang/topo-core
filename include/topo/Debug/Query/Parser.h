@@ -2,7 +2,7 @@
 #define TOPO_DEBUG_QUERY_PARSER_H
 
 // Query expression parser (recursive descent on the
-// §2.4 grammar).
+// query-expression grammar).
 //
 // On parse error returns nullptr and fills `error` with a human-readable
 // message including the column offset.

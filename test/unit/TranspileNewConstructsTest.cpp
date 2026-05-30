@@ -998,8 +998,7 @@ TEST(TranspileNewConstructsEmitter, RustMixedVarsNoMatch) {
 }
 
 // =====================================================================
-// Emitter output: parameter mutability (issue:
-// rust-emitter-parameter-reassignment-immutable)
+// Emitter output: parameter mutability.
 // Rust parameters are immutable by default. When a TranspileFunction
 // reassigns a parameter in its body, the emitter must produce `mut name: T`
 // to avoid E0384.
@@ -2008,8 +2007,8 @@ TEST(TranspileRustGenericsPhase3, LifetimeWithOutlivesRendersColon) {
 }
 
 TEST(TranspileRustGenericsPhase3, TypeParamWithLifetimeBoundRenders) {
-    // `struct Holder<'a, T: 'a> { value: &'a T }` — the canonical roadmap
-    // example. Wire model: lifetime "a" + type param T whose single bound
+    // `struct Holder<'a, T: 'a> { value: &'a T }` — the canonical
+    // lifetime-bound example. Wire model: lifetime "a" + type param T whose single bound
     // is the lifetime `'a` (TypeNode with nameParts={"'a"}). Note: a
     // top-level struct (qualifiedName has no `::` namespace) renders
     // without `pub` — the visibility prefix is namespace-driven, matching

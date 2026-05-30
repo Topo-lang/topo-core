@@ -778,7 +778,7 @@ TEST(ContainmentCheck, MutationGuard_CallerSkipUsesQualifiedName) {
     EXPECT_NE(result.diagnostics[0].message.find("fork"), std::string::npos);
 }
 
-// Test 32: Callee simple-name collision regression (issue checker-containment-callee-simplename-collision).
+// Test 32: Callee simple-name collision regression.
 // External `io::read` and a non-external `fs::Reader::read` coexist. A non-external
 // caller invoking the user method must NOT have its containment violation skipped
 // just because the callee simple-name "read" matches the external function.

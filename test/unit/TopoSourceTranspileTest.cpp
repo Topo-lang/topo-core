@@ -341,7 +341,7 @@ TEST(AdapterResolverM3, TruePeerAmbiguityDegrades) {
 }
 
 TEST(AdapterResolverM3, FallsBackToLowerPriorityWhenHigherMismatchedSignature) {
-    // Contract (adapter-model.md §3.4): "among compatible candidates, pick
+    // Contract: "among compatible candidates, pick
     // highest priority". A signature-drifted higher-priority candidate must
     // NOT block a signature-matching lower-priority one — the resolver
     // skips the bad candidate (with a diagnostic) and installs the good one.
@@ -548,7 +548,7 @@ TEST(BuiltinAdapterSourceM5, BuiltinZeroResolvesAnUnresolvedLeaf) {
 
 TEST(AssembleAdapterRegistryM5, LoadsTopoAppManifestAndOverridesBuiltin) {
     // A topo-app manifest re-supplying `topo::zero` for Cpp. topo-app
-    // provenance outranks builtin (§3.4), so it wins with an override warning.
+    // provenance outranks builtin, so it wins with an override warning.
     const std::string manifest = R"json(
 [
   { "topoFunction": "topo::zero", "targetLanguage": "cpp",
