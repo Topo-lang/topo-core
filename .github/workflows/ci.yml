@@ -116,14 +116,20 @@ jobs:
   # topo-lang-{cpp,rust,java,python}) to one prefix, re-installs
   # topo-core with WITH_LANG=ON, then drives standalone topo-core
   # TESTS=ON ctest — the verification originally deferred at split time.
-  # Linux-only to keep CI cost manageable; the cross-platform matrix is
-  # covered by the base job.
+  # Runs on all three platforms: the WITH_LANG suites (TopoBuildLib /
+  # TopoTranspile / language-plugin-coupled tests) exercise transpile/codegen
+  # plus filesystem/process paths that break platform-specifically, so they
+  # need macOS + Windows coverage too — not just the Linux find_package chain.
   verify-with-lang:
-    name: verify (TESTS=ON, WITH_LANG=ON, ubuntu-24.04)
-    runs-on: ubuntu-24.04
+    name: verify (TESTS=ON, WITH_LANG=ON, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
     env:
       TOPO_LANG_REF: main
       TOPO_LANG_CPP_REF: main
@@ -133,8 +139,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install build deps
+      - name: Install build deps (linux)
+        if: runner.os == 'Linux'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Install build deps (macos)
+        if: runner.os == 'macOS'
+        run: brew install ninja
 
       - name: Export GHA cache env (for vcpkg x-gha backend)
         uses: actions/github-script@v8
@@ -157,7 +168,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ runner.temp }}/topo-install
-          key: topo-lang-prefix-${{ env.TOPO_LANG_REF }}-${{ env.TOPO_LANG_CPP_REF }}-${{ env.TOPO_LANG_RUST_REF }}-${{ env.TOPO_LANG_JAVA_REF }}-${{ env.TOPO_LANG_PYTHON_REF }}-v1
+          key: topo-lang-prefix-${{ matrix.os }}-${{ env.TOPO_LANG_REF }}-${{ env.TOPO_LANG_CPP_REF }}-${{ env.TOPO_LANG_RUST_REF }}-${{ env.TOPO_LANG_JAVA_REF }}-${{ env.TOPO_LANG_PYTHON_REF }}-v1
 
       - name: Build & install topo-core (lang-less)
         if: steps.lang-prefix-cache.outputs.cache-hit != 'true'
