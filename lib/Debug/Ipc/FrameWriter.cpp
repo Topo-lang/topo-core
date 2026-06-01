@@ -3,6 +3,11 @@
 #include <cstdio>
 #include <string>
 
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
+
 namespace topo::debug_ipc {
 
 bool writeJsonLine(ByteSink& sink, const nlohmann::json& j) {
@@ -33,6 +38,13 @@ ByteSink byteSinkToString(std::string& dest) {
 }
 
 ByteSink byteSinkToStdout() {
+#ifdef _WIN32
+    // The wire protocol is raw binary frames plus LF-delimited JSON lines.
+    // Windows text-mode stdout expands every 0x0A to 0x0D 0x0A, which corrupts
+    // binary frame payloads and the LF framing (the adapter→debugger channel
+    // then fails with "unexpected first byte"). Force stdout to binary mode.
+    _setmode(_fileno(stdout), _O_BINARY);
+#endif
     ByteSink s;
     s.write = [](const uint8_t* data, size_t n) {
         size_t total = 0;
