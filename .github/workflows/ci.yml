@@ -286,4 +286,23 @@ jobs:
         run: cmake --build build-with-lang
 
       - name: Test
-        run: ctest --test-dir build-with-lang --output-on-failure --timeout 180
+        run: |
+          # Windows: the test exe links the installed per-language plugin
+          # static libs; if a plugin was built against a vcpkg dep that
+          # produces a runtime DLL, that DLL is not in build-with-lang's own
+          # vcpkg_installed tree. Add the install + plugin vcpkg bin dirs to
+          # PATH so the loader resolves it. The direct-run diagnostic surfaces
+          # the exact missing DLL / entry point (0xC0000139) if PATH is still
+          # short a dir — remove once the Windows leg is green.
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            export PATH="${RUNNER_TEMP}/topo-install/bin:${PATH}"
+            for d in "${RUNNER_TEMP}"/*-build/vcpkg_installed/x64-windows/bin \
+                     build-with-lang/vcpkg_installed/x64-windows/bin; do
+              [ -d "$d" ] && export PATH="${d}:${PATH}"
+            done
+            echo "::group::diagnostic — direct test-exe load (names missing DLL/entry point)"
+            ./build-with-lang/test/topo-core-tests.exe --gtest_list_tests 2>&1 | head -20 \
+              || echo "(direct run exit=$?)"
+            echo "::endgroup::"
+          fi
+          ctest --test-dir build-with-lang --output-on-failure --timeout 180
