@@ -285,28 +285,19 @@ jobs:
       - name: Build
         run: cmake --build build-with-lang
 
-      # DIAGNOSTIC (Windows, temporary): the test exe aborts at PRE_TEST gtest
-      # discovery with 0xC0000139 (STATUS_ENTRYPOINT_NOT_FOUND). No topo lib is
-      # SHARED and every vcpkg dep is header-only, so dump the PE import table
-      # to name the DLL / entry point the loader can't satisfy. Remove once the
-      # Windows leg is green.
-      - name: Diagnose test-exe DLL imports (windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
-          Import-Module "$vs\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
-          Enter-VsDevShell -VsInstallPath $vs -DevCmdArguments "-arch=x64" -SkipAutomaticLocation | Out-Null
-          $exe = "build-with-lang/test/topo-core-tests.exe"
-          Write-Host "=== dumpbin /dependents $exe ==="
-          dumpbin /dependents $exe
-          Write-Host "=== resolve each imported DLL via where.exe (UNRESOLVED = culprit) ==="
-          (dumpbin /dependents $exe | Select-String '\.dll$').Matches.Value | ForEach-Object {
-            $d = $_.Trim()
-            $w = (cmd /c "where $d" 2>$null)
-            if ($w) { Write-Host "OK   $d -> $($w -split "`n" | Select-Object -First 1)" }
-            else    { Write-Host "MISS $d  <-- not on loader path" }
-          }
-
       - name: Test
-        run: ctest --test-dir build-with-lang --output-on-failure --timeout 180
+        run: |
+          # Windows: the exe is built with MinGW gcc (libstdc++-6 /
+          # libgcc_s_seh-1 / libwinpthread-1). topo-core uses PRE_TEST gtest
+          # discovery, so the exe is launched at ctest time — when a STALE
+          # libstdc++-6.dll (Git/Strawberry's, earlier on PATH) shadows the
+          # build compiler's, missing the newer symbols → 0xC0000139
+          # (STATUS_ENTRYPOINT_NOT_FOUND). Put the exact build-time gcc bin dir
+          # (from CMakeCache) FIRST on PATH so its matching runtime resolves.
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cxx=$(grep -m1 '^CMAKE_CXX_COMPILER:' build-with-lang/CMakeCache.txt | cut -d= -f2)
+            if [ -n "$cxx" ]; then
+              export PATH="$(cygpath -u "$(dirname "$cxx")"):${PATH}"
+            fi
+          fi
+          ctest --test-dir build-with-lang --output-on-failure --timeout 180
