@@ -66,6 +66,14 @@ TEST(StubRewriter, RestoreEmptyResult) {
 }
 
 // --- PruningOrchestrator Tests ---
+//
+// Fixture portability: runBuildAndTest() directly execs testCommand's first
+// token (no shell) in projectDir and only checks the exit code. So the fixture
+// uses a real cross-platform executable that exits 0 ("hostname") rather than
+// "echo" (a cmd.exe builtin, not an .exe on Windows), and "." as the working
+// directory rather than "/tmp" (not a valid Windows path). On Windows the old
+// fixture aborted with "failed to start process 'echo': The directory name is
+// invalid" — only on the verifyStage(N>lowest) cases that actually run it.
 
 TEST(PruningOrchestrator, EmptySymbolTablePassesTrivially) {
     SymbolTable symbols;
@@ -75,8 +83,8 @@ TEST(PruningOrchestrator, EmptySymbolTablePassesTrivially) {
     auto rewriter = std::make_unique<StubRewriter>(std::move(stubGen), std::vector<std::string>{});
 
     PruningConfig config;
-    config.projectDir = "/tmp";
-    config.testCommand = "echo ok";
+    config.projectDir = ".";
+    config.testCommand = "hostname";
 
     PruningOrchestrator orch(stageInfo, std::move(rewriter), config);
     auto result = orch.verifyAllStages();
@@ -104,8 +112,8 @@ TEST(PruningOrchestrator, SingleStagePassesTrivially) {
     auto rewriter = std::make_unique<StubRewriter>(std::move(stubGen), std::vector<std::string>{});
 
     PruningConfig config;
-    config.projectDir = "/tmp";
-    config.testCommand = "echo ok";
+    config.projectDir = ".";
+    config.testCommand = "hostname";
 
     PruningOrchestrator orch(stageInfo, std::move(rewriter), config);
     auto result = orch.verifyAllStages();
@@ -149,8 +157,8 @@ TEST(PruningOrchestrator, MultipleStagesHighestFirst) {
     auto rewriter = std::make_unique<StubRewriter>(std::move(stubGen), std::vector<std::string>{});
 
     PruningConfig config;
-    config.projectDir = "/tmp";
-    config.testCommand = "echo ok";
+    config.projectDir = ".";
+    config.testCommand = "hostname";
 
     PruningOrchestrator orch(stageInfo, std::move(rewriter), config);
     auto result = orch.verifyAllStages();
@@ -188,8 +196,8 @@ TEST(PruningOrchestrator, VerifySingleStageStubsLowerStages) {
     auto rewriter = std::make_unique<StubRewriter>(std::move(stubGen), std::vector<std::string>{});
 
     PruningConfig config;
-    config.projectDir = "/tmp";
-    config.testCommand = "echo ok";
+    config.projectDir = ".";
+    config.testCommand = "hostname";
 
     PruningOrchestrator orch(stageInfo, std::move(rewriter), config);
     auto result = orch.verifyStage(2);
@@ -219,8 +227,8 @@ TEST(PruningOrchestrator, LowestStageHasNothingToStub) {
     auto rewriter = std::make_unique<StubRewriter>(std::move(stubGen), std::vector<std::string>{});
 
     PruningConfig config;
-    config.projectDir = "/tmp";
-    config.testCommand = "echo ok";
+    config.projectDir = ".";
+    config.testCommand = "hostname";
 
     PruningOrchestrator orch(stageInfo, std::move(rewriter), config);
     auto result = orch.verifyStage(1);
@@ -260,8 +268,8 @@ TEST(PruningOrchestrator, StageGroupingWithMultipleFunctionsPerStage) {
     auto rewriter = std::make_unique<StubRewriter>(std::move(stubGen), std::vector<std::string>{});
 
     PruningConfig config;
-    config.projectDir = "/tmp";
-    config.testCommand = "echo ok";
+    config.projectDir = ".";
+    config.testCommand = "hostname";
 
     PruningOrchestrator orch(stageInfo, std::move(rewriter), config);
 
