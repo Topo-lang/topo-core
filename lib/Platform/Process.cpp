@@ -1,16 +1,25 @@
 #include "topo/Platform/Process.h"
 
-#include <reproc++/drain.hpp>
 #include <reproc++/reproc.hpp>
 
+#include <atomic>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <system_error>
 #include <unordered_map>
 #include <vector>
+
+#ifdef _WIN32
+#  include <process.h> // _getpid
+#else
+#  include <unistd.h>  // getpid
+#endif
 
 namespace topo::platform {
 
@@ -21,8 +30,9 @@ namespace topo::platform {
 //   - closeStdin() closes ONLY stdin; stdout remains drainable.
 //   - stop(timeoutMs) waits, then terminates, then kills the child.
 //   - runProcessCaptureWithTimeout returns exitCode == -1 on timeout.
-//   - capture drain is bounded by a process deadline so a Windows child whose
-//     socket-based EOF never arrives can't hang the call (exitCode == -1).
+//   - capture redirects stdout/stderr to temp files (not pipes) so the Windows
+//     loopback-socket EOF that fails to arrive for MinGW children can't hang
+//     the call; wait is bounded by a process deadline (exitCode == -1 on hit).
 //   - isRunning() reaps a terminated child so exitCode() reflects the status.
 //   - argv passed without a shell — no quoting, no env substitution.
 
@@ -51,35 +61,73 @@ std::vector<std::string> buildArgv(const std::string& exe,
     return argv;
 }
 
-// Run helper used by runProcessCapture / runProcessCaptureWithTimeout. When
-// timeoutMs < 0 the call waits indefinitely; otherwise it kills the child on
-// timeout and sets exitCode = -1.
+int capturePid() {
+#ifdef _WIN32
+    return _getpid();
+#else
+    return static_cast<int>(::getpid());
+#endif
+}
+
+// Unique temp path for capturing one child stream. temp_dir + pid + a
+// process-monotonic counter, so concurrent captures (e.g. the e2e harness
+// spawning many tools) cannot collide. reproc opens/creates the path for the
+// child's redirected stream.
+std::string makeCaptureTempPath(const char* tag) {
+    static std::atomic<unsigned long long> counter{0};
+    const unsigned long long n = counter.fetch_add(1, std::memory_order_relaxed);
+    std::error_code ec;
+    std::filesystem::path dir = std::filesystem::temp_directory_path(ec);
+    if (ec) dir = std::filesystem::path("."); // fall back to cwd
+    std::filesystem::path p =
+        dir / ("topo-capture-" + std::to_string(capturePid()) + "-" +
+               std::to_string(n) + "-" + tag);
+    return p.string();
+}
+
+std::string readCaptureTempFile(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return {};
+    return std::string(std::istreambuf_iterator<char>(in),
+                       std::istreambuf_iterator<char>());
+}
+
+void removeCaptureTempFile(const std::string& path) {
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+}
+
+// Run helper used by runProcessCapture / runProcessCaptureWithTimeout. The
+// child's stdout/stderr are redirected to temp FILES (not pipes): reproc's pipe
+// path drains the two streams over loopback sockets and waits for their EOF,
+// and on GHA windows-2022 that EOF is not reliably delivered for MinGW children
+// — so reproc::drain's poll blocks forever (the tpm-cli / input-trust capture
+// suites hung there). Files remove the out/err sockets entirely: the child
+// writes to disk and we read it after it exits. Only reproc's dedicated exit
+// socket remains (closed by the OS on process termination — reliable), so
+// wait() returns normally. POSIX behaves identically (a temp file instead of a
+// pipe). wait is still bounded by a deadline so a child that never exits fails
+// at the bound (exitCode = -1) rather than hanging.
 CapturedProcessResult runCapture(const std::string& exe,
                                  const std::vector<std::string>& args,
                                  const std::string& workingDir,
                                  int timeoutMs) {
     CapturedProcessResult result;
 
+    const std::string outPath = makeCaptureTempPath("out");
+    const std::string errPath = makeCaptureTempPath("err");
+
     reproc::options options;
     if (!workingDir.empty()) options.working_directory = workingDir.c_str();
     options.redirect.in.type = reproc::redirect::discard;
-    options.redirect.out.type = reproc::redirect::pipe;
-    options.redirect.err.type = reproc::redirect::pipe;
+    options.redirect.out.type = reproc::redirect::path_;
+    options.redirect.out.path = outPath.c_str();
+    options.redirect.err.type = reproc::redirect::path_;
+    options.redirect.err.path = errPath.c_str();
 
-    // Bound the poll-driven drain with a process deadline. reproc::drain calls
-    // process.poll(out|err, infinite); only the process *deadline* (not the
-    // poll timeout) caps that poll (reproc.h: "only reproc_poll takes the
-    // deadline into account"). Without it (deadline defaults to 0 = none) the
-    // poll can block forever: on Windows reproc drains over loopback sockets
-    // and signals child exit via an extra inherited socket, and that EOF
-    // notification can fail to arrive for MinGW children on the GHA
-    // windows-2022 runner — so the input-trust / tpm-cli capture suites hang
-    // instead of finishing in milliseconds. With a deadline, drain returns
-    // errc::timed_out (event::deadline) and we kill + reap. POSIX is
-    // unaffected: pipe EOF (POLLHUP) is reliable there, so the deadline is a
-    // pure upper-bound safety net. The no-timeout overloads use a default
-    // bound; the explicit-timeout overload uses the caller's value.
-    constexpr int kDefaultCaptureDeadlineMs = 120000; // 120s; matches CI ctest --timeout
+    // Bound the wait. The no-timeout overloads use a default bound (matches CI
+    // ctest --timeout); the explicit-timeout overload uses the caller's value.
+    constexpr int kDefaultCaptureDeadlineMs = 120000; // 120s
     const int deadlineMs = timeoutMs >= 0 ? timeoutMs : kDefaultCaptureDeadlineMs;
     options.deadline = reproc::milliseconds(deadlineMs);
 
@@ -89,35 +137,15 @@ CapturedProcessResult runCapture(const std::string& exe,
     if (ec) {
         std::cerr << "error: failed to start process '" << exe << "': "
                   << ec.message() << "\n";
+        removeCaptureTempFile(outPath);
+        removeCaptureTempFile(errPath);
         return result;
     }
 
-    // Drain both pipes via reproc's poll-driven sink (no deadlock vs
-    // sequential reads on a full pipe), bounded by options.deadline above.
-    std::error_code drainEc =
-        reproc::drain(process,
-                      reproc::sink::string(result.stdoutOutput),
-                      reproc::sink::string(result.stderrOutput));
-    if (drainEc == std::errc::timed_out) {
-        // Deadline hit while draining (the Windows socket-EOF hang). Kill +
-        // reap so the child is gone before we return, then report failure.
-        process.stop({{reproc::stop::kill, reproc::milliseconds(0)},
-                      {reproc::stop::wait, reproc::milliseconds(5000)},
-                      {reproc::stop::noop, reproc::milliseconds(0)}});
-        result.exitCode = -1;
-        return result;
-    }
-
-    if (timeoutMs < 0) {
-        auto [status, waitEc] =
-            process.wait(reproc::milliseconds(reproc::infinite));
-        if (!waitEc) result.exitCode = status;
-        return result;
-    }
-
-    auto [status, waitEc] = process.wait(reproc::milliseconds(timeoutMs));
+    auto [status, waitEc] = process.wait(reproc::milliseconds(deadlineMs));
     if (waitEc == std::errc::timed_out) {
-        // Force-kill and reap so the child is gone before we return.
+        // Deadline hit — force-kill and reap so the child is gone before we
+        // return; report failure via exitCode == -1.
         process.stop({{reproc::stop::kill, reproc::milliseconds(0)},
                       {reproc::stop::wait, reproc::milliseconds(5000)},
                       {reproc::stop::noop, reproc::milliseconds(0)}});
@@ -125,6 +153,13 @@ CapturedProcessResult runCapture(const std::string& exe,
     } else if (!waitEc) {
         result.exitCode = status;
     }
+
+    // Read whatever the child wrote (present even on a timeout/partial run),
+    // then remove the temp files.
+    result.stdoutOutput = readCaptureTempFile(outPath);
+    result.stderrOutput = readCaptureTempFile(errPath);
+    removeCaptureTempFile(outPath);
+    removeCaptureTempFile(errPath);
     return result;
 }
 
