@@ -21,6 +21,8 @@ namespace topo::platform {
 //   - closeStdin() closes ONLY stdin; stdout remains drainable.
 //   - stop(timeoutMs) waits, then terminates, then kills the child.
 //   - runProcessCaptureWithTimeout returns exitCode == -1 on timeout.
+//   - capture drain is bounded by a process deadline so a Windows child whose
+//     socket-based EOF never arrives can't hang the call (exitCode == -1).
 //   - isRunning() reaps a terminated child so exitCode() reflects the status.
 //   - argv passed without a shell — no quoting, no env substitution.
 
@@ -64,6 +66,23 @@ CapturedProcessResult runCapture(const std::string& exe,
     options.redirect.out.type = reproc::redirect::pipe;
     options.redirect.err.type = reproc::redirect::pipe;
 
+    // Bound the poll-driven drain with a process deadline. reproc::drain calls
+    // process.poll(out|err, infinite); only the process *deadline* (not the
+    // poll timeout) caps that poll (reproc.h: "only reproc_poll takes the
+    // deadline into account"). Without it (deadline defaults to 0 = none) the
+    // poll can block forever: on Windows reproc drains over loopback sockets
+    // and signals child exit via an extra inherited socket, and that EOF
+    // notification can fail to arrive for MinGW children on the GHA
+    // windows-2022 runner — so the input-trust / tpm-cli capture suites hang
+    // instead of finishing in milliseconds. With a deadline, drain returns
+    // errc::timed_out (event::deadline) and we kill + reap. POSIX is
+    // unaffected: pipe EOF (POLLHUP) is reliable there, so the deadline is a
+    // pure upper-bound safety net. The no-timeout overloads use a default
+    // bound; the explicit-timeout overload uses the caller's value.
+    constexpr int kDefaultCaptureDeadlineMs = 120000; // 120s; matches CI ctest --timeout
+    const int deadlineMs = timeoutMs >= 0 ? timeoutMs : kDefaultCaptureDeadlineMs;
+    options.deadline = reproc::milliseconds(deadlineMs);
+
     reproc::process process;
     auto argv = buildArgv(exe, args);
     std::error_code ec = process.start(argv, options);
@@ -74,10 +93,20 @@ CapturedProcessResult runCapture(const std::string& exe,
     }
 
     // Drain both pipes via reproc's poll-driven sink (no deadlock vs
-    // sequential reads on a full pipe).
-    (void) reproc::drain(process,
-                         reproc::sink::string(result.stdoutOutput),
-                         reproc::sink::string(result.stderrOutput));
+    // sequential reads on a full pipe), bounded by options.deadline above.
+    std::error_code drainEc =
+        reproc::drain(process,
+                      reproc::sink::string(result.stdoutOutput),
+                      reproc::sink::string(result.stderrOutput));
+    if (drainEc == std::errc::timed_out) {
+        // Deadline hit while draining (the Windows socket-EOF hang). Kill +
+        // reap so the child is gone before we return, then report failure.
+        process.stop({{reproc::stop::kill, reproc::milliseconds(0)},
+                      {reproc::stop::wait, reproc::milliseconds(5000)},
+                      {reproc::stop::noop, reproc::milliseconds(0)}});
+        result.exitCode = -1;
+        return result;
+    }
 
     if (timeoutMs < 0) {
         auto [status, waitEc] =
