@@ -16,6 +16,13 @@
 #include <vector>
 
 #ifdef _WIN32
+#  ifndef WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
+#  endif
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
+#  include <windows.h>
 #  include <process.h> // _getpid
 #else
 #  include <unistd.h>  // getpid
@@ -97,21 +104,176 @@ void removeCaptureTempFile(const std::string& path) {
     std::filesystem::remove(path, ec);
 }
 
-// Run helper used by runProcessCapture / runProcessCaptureWithTimeout. The
-// child's stdout/stderr are redirected to temp FILES (not pipes): reproc's pipe
-// path drains the two streams over loopback sockets and waits for their EOF,
-// and on GHA windows-2022 that EOF is not reliably delivered for MinGW children
-// — so reproc::drain's poll blocks forever (the tpm-cli / input-trust capture
-// suites hung there). Files remove the out/err sockets entirely: the child
-// writes to disk and we read it after it exits. Only reproc's dedicated exit
-// socket remains (closed by the OS on process termination — reliable), so
-// wait() returns normally. POSIX behaves identically (a temp file instead of a
-// pipe). wait is still bounded by a deadline so a child that never exits fails
-// at the bound (exitCode = -1) rather than hanging.
+#ifdef _WIN32
+
+// ---- Windows raw-Win32 capture path ----
+// reproc's Windows backend drains stdout/stderr and detects child exit over
+// loopback sockets; on GHA windows-2022 that exit/EOF notification is not
+// reliably delivered for MinGW children, so reproc's drain/wait blocks even for
+// an instant-exit process (the tpm-cli / input-trust suites timed out). Bypass
+// reproc on Windows: spawn with CreateProcess, redirect stdout/stderr to temp
+// FILES (inheritable handles), discard stdin (NUL), and detect exit with
+// WaitForSingleObject on the real process HANDLE (reliable) + GetExitCodeProcess.
+
+std::wstring utf8ToWide(const std::string& s) {
+    if (s.empty()) return std::wstring();
+    int n = MultiByteToWideChar(CP_UTF8, 0, s.data(),
+                                static_cast<int>(s.size()), nullptr, 0);
+    std::wstring w(static_cast<size_t>(n), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()),
+                        w.data(), n);
+    return w;
+}
+
+// Quote one argument per the CommandLineToArgvW / MSVC-runtime rules so the
+// child reconstructs argv exactly (backslashes are doubled only before a quote
+// or at the end of a quoted token).
+void appendQuotedArg(std::wstring& cmd, const std::wstring& arg) {
+    if (!arg.empty() &&
+        arg.find_first_of(L" \t\n\v\"") == std::wstring::npos) {
+        cmd += arg;
+        return;
+    }
+    cmd += L'"';
+    for (auto it = arg.begin();; ++it) {
+        unsigned backslashes = 0;
+        while (it != arg.end() && *it == L'\\') {
+            ++it;
+            ++backslashes;
+        }
+        if (it == arg.end()) {
+            cmd.append(backslashes * 2, L'\\');
+            break;
+        }
+        if (*it == L'"') {
+            cmd.append(backslashes * 2 + 1, L'\\');
+            cmd += L'"';
+        } else {
+            cmd.append(backslashes, L'\\');
+            cmd += *it;
+        }
+    }
+    cmd += L'"';
+}
+
+std::wstring buildCommandLineW(const std::string& exe,
+                               const std::vector<std::string>& args) {
+    std::wstring cmd;
+    appendQuotedArg(cmd, utf8ToWide(exe));
+    for (const auto& a : args) {
+        cmd += L' ';
+        appendQuotedArg(cmd, utf8ToWide(a));
+    }
+    return cmd;
+}
+
+HANDLE openInheritableFile(const std::string& path, DWORD access,
+                           DWORD disposition) {
+    SECURITY_ATTRIBUTES sa{};
+    sa.nLength = sizeof(sa);
+    sa.bInheritHandle = TRUE;
+    sa.lpSecurityDescriptor = nullptr;
+    return CreateFileW(utf8ToWide(path).c_str(), access,
+                       FILE_SHARE_READ | FILE_SHARE_WRITE, &sa, disposition,
+                       FILE_ATTRIBUTE_NORMAL, nullptr);
+}
+
+CapturedProcessResult runCaptureWindows(const std::string& exe,
+                                        const std::vector<std::string>& args,
+                                        const std::string& workingDir,
+                                        int timeoutMs) {
+    CapturedProcessResult result;
+    const std::string outPath = makeCaptureTempPath("out");
+    const std::string errPath = makeCaptureTempPath("err");
+
+    HANDLE hOut = openInheritableFile(outPath, GENERIC_WRITE, CREATE_ALWAYS);
+    HANDLE hErr = openInheritableFile(errPath, GENERIC_WRITE, CREATE_ALWAYS);
+    HANDLE hIn = openInheritableFile("NUL", GENERIC_READ, OPEN_EXISTING);
+    if (hOut == INVALID_HANDLE_VALUE || hErr == INVALID_HANDLE_VALUE ||
+        hIn == INVALID_HANDLE_VALUE) {
+        std::cerr << "error: failed to open capture handles for '" << exe
+                  << "'\n";
+        if (hOut != INVALID_HANDLE_VALUE) CloseHandle(hOut);
+        if (hErr != INVALID_HANDLE_VALUE) CloseHandle(hErr);
+        if (hIn != INVALID_HANDLE_VALUE) CloseHandle(hIn);
+        removeCaptureTempFile(outPath);
+        removeCaptureTempFile(errPath);
+        return result;
+    }
+
+    STARTUPINFOW si{};
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdInput = hIn;
+    si.hStdOutput = hOut;
+    si.hStdError = hErr;
+
+    PROCESS_INFORMATION pi{};
+    std::wstring cmdLine = buildCommandLineW(exe, args);
+    std::wstring wcwd =
+        workingDir.empty() ? std::wstring() : utf8ToWide(workingDir);
+
+    BOOL ok = CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr,
+                             /*bInheritHandles=*/TRUE, /*flags=*/0, nullptr,
+                             wcwd.empty() ? nullptr : wcwd.c_str(), &si, &pi);
+
+    // Drop our copies of the child's std handles; the child holds its own and
+    // is the sole writer once we've closed ours.
+    CloseHandle(hOut);
+    CloseHandle(hErr);
+    CloseHandle(hIn);
+
+    if (!ok) {
+        std::cerr << "error: failed to start process '" << exe
+                  << "': CreateProcess failed (" << GetLastError() << ")\n";
+        removeCaptureTempFile(outPath);
+        removeCaptureTempFile(errPath);
+        return result;
+    }
+
+    constexpr int kDefaultCaptureDeadlineMs = 120000; // 120s
+    const DWORD waitMs = static_cast<DWORD>(
+        timeoutMs >= 0 ? timeoutMs : kDefaultCaptureDeadlineMs);
+    DWORD wr = WaitForSingleObject(pi.hProcess, waitMs);
+    if (wr == WAIT_OBJECT_0) {
+        DWORD code = 0;
+        result.exitCode = GetExitCodeProcess(pi.hProcess, &code)
+                              ? static_cast<int>(code)
+                              : -1;
+    } else {
+        // Timeout (or wait failure): kill + reap, report failure (exitCode -1).
+        TerminateProcess(pi.hProcess, 1);
+        WaitForSingleObject(pi.hProcess, 5000);
+        result.exitCode = -1;
+    }
+
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+
+    result.stdoutOutput = readCaptureTempFile(outPath);
+    result.stderrOutput = readCaptureTempFile(errPath);
+    removeCaptureTempFile(outPath);
+    removeCaptureTempFile(errPath);
+    return result;
+}
+
+#endif // _WIN32
+
+// Run helper used by runProcessCapture / runProcessCaptureWithTimeout. Windows
+// uses the raw-Win32 path above — reproc's loopback-socket exit detection is
+// unreliable for MinGW children on GHA windows-2022. Elsewhere reproc spawns the
+// child with stdout/stderr redirected to temp FILES (not pipes): the child
+// writes to disk and we read it after it exits, so only reproc's dedicated exit
+// socket remains (pipe EOF is reliable on POSIX). wait is bounded by a deadline
+// so a child that never exits fails at the bound (exitCode = -1) rather than
+// hanging.
 CapturedProcessResult runCapture(const std::string& exe,
                                  const std::vector<std::string>& args,
                                  const std::string& workingDir,
                                  int timeoutMs) {
+#ifdef _WIN32
+    return runCaptureWindows(exe, args, workingDir, timeoutMs);
+#else
     CapturedProcessResult result;
 
     const std::string outPath = makeCaptureTempPath("out");
@@ -161,6 +323,7 @@ CapturedProcessResult runCapture(const std::string& exe,
     removeCaptureTempFile(outPath);
     removeCaptureTempFile(errPath);
     return result;
+#endif // _WIN32
 }
 
 } // namespace
