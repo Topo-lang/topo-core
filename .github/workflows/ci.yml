@@ -12,12 +12,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ── Build + test the foundation package ────────
+  # ── Build + install-smoke the foundation package ────────
   # topo-core sits at the root of the topo dependency graph; no upstream
-  # topo-* package to install. CI exercises the standalone configure /
-  # build / ctest path used by every downstream repo's installer step.
+  # topo-* package to install. This job exercises the standalone configure /
+  # build / install / find_package path used by every downstream repo's
+  # installer step. It deliberately runs NO ctest: at this lang-less default
+  # scope topo-core builds zero tests (TOPO_CORE_BUILD_TESTS is OFF), so a
+  # ctest step here would only ever report "No tests were found" and pass
+  # green — a misleading test surface. The full 1011-case unit suite runs in
+  # the verify-with-lang job below (TESTS=ON, WITH_LANG=ON) on all three
+  # platforms.
   build-and-test:
-    name: build + test (${{ matrix.os }})
+    name: build + smoke (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -60,9 +66,6 @@ jobs:
 
       - name: Build
         run: cmake --build build
-
-      - name: Test
-        run: ctest --test-dir build --output-on-failure --timeout 120
 
       # Smoke test: install topo-core, then verify a downstream
       # `find_package(topo-core)` resolves and links cleanly.
