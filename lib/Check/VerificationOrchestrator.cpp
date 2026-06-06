@@ -267,8 +267,14 @@ VerificationResult VerificationOrchestrator::verifyPipelineIndependence() {
                     stubs.push_back({srcFile, stubRes});
                 } else {
                     stubFailed = true;
-                    // Restore any stubs we already applied
+                    // Restore any stubs already applied. Restore each file only
+                    // once, from the FIRST stub recorded for it: its
+                    // originalContent is the true whole-file original. Multiple
+                    // branch functions can share a source file, and a later
+                    // stub of that file captured already-stubbed content.
+                    std::set<std::string> restored;
                     for (auto& [sf, sr] : stubs) {
+                        if (!restored.insert(sf).second) continue;
                         stubGen_->restoreFile(sf, sr);
                     }
                     break;
@@ -303,8 +309,14 @@ VerificationResult VerificationOrchestrator::verifyPipelineIndependence() {
 
             result.tests.push_back(tr);
 
-            // Restore all stubs
+            // Restore all stubs. Restore each file only once, from the FIRST
+            // stub recorded for it: the stub generator captures whole-file
+            // content per call, so a second function stubbed in the same file
+            // captured already-stubbed content. Writing that snapshot back
+            // would re-apply the first stub and corrupt the user's source.
+            std::set<std::string> restored;
             for (auto& [sf, sr] : stubs) {
+                if (!restored.insert(sf).second) continue;
                 stubGen_->restoreFile(sf, sr);
             }
         }
