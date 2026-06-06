@@ -124,16 +124,34 @@ EvalResult validateReadable(const FrameView& v) {
         return err("unsupported dtype '" + v.layout().dtype + "'");
     }
     int64_t n = numel(v.layout().shape);
+    if (n < 0) {
+        return err("invalid (negative) element count");
+    }
     uint64_t stride = v.effectiveElemStride();
-    size_t need = static_cast<size_t>(n) * static_cast<size_t>(stride);
+    // Guard the byte-size computation against unsigned overflow: a huge
+    // shape/stride could wrap the product and yield a tiny `need` that passes
+    // the bounds check below, enabling an out-of-bounds read in the fold loop.
+    auto mulOverflows = [](uint64_t a, uint64_t b, uint64_t& result) {
+        if (a != 0 && b > std::numeric_limits<uint64_t>::max() / a) return true;
+        result = a * b;
+        return false;
+    };
     // For a strided view, the last element occupies bytes
     // [(n-1)*stride, (n-1)*stride + sizeof(elem)); the buffer needs to
     // reach the end of that last element, not n*stride.
+    uint64_t need = 0;
     if (v.isStrided() && n > 0) {
-        size_t elemSize = dtypeSize(v.layout().dtype);
-        need = static_cast<size_t>(n - 1) * static_cast<size_t>(stride) + elemSize;
+        uint64_t elemSize = dtypeSize(v.layout().dtype);
+        uint64_t base = 0;
+        if (mulOverflows(static_cast<uint64_t>(n - 1), stride, base) ||
+            base > std::numeric_limits<uint64_t>::max() - elemSize) {
+            return err("frame byte size overflow for shape/stride");
+        }
+        need = base + elemSize;
+    } else if (mulOverflows(static_cast<uint64_t>(n), stride, need)) {
+        return err("frame byte size overflow for shape/stride");
     }
-    if (v.bytes().size < need) {
+    if (static_cast<uint64_t>(v.bytes().size) < need) {
         return err("frame byte buffer too small for shape (expected " +
                    std::to_string(need) + ", got " + std::to_string(v.bytes().size) + ")");
     }

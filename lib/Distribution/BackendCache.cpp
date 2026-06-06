@@ -156,6 +156,23 @@ InstallOutcome BackendCache::installFromUnpacked(const std::string& unpackedDir,
     }
     const BackendManifest& m = parsed.manifest;
 
+    // ── name/version path-traversal guard ─────────────────────────
+    // backend.name and backend.version are used verbatim as filesystem
+    // path components below (root_/<name>/<version>). Reject anything that
+    // is not a single safe path segment so a hostile manifest cannot escape
+    // the cache root (e.g. version = "../../etc" or an absolute path).
+    auto isSafeSegment = [](const std::string& s) {
+        if (s.empty() || s == "." || s == "..") return false;
+        return s.find('/') == std::string::npos && s.find('\\') == std::string::npos &&
+               s.find('\0') == std::string::npos;
+    };
+    if (!isSafeSegment(m.backend.name) || !isSafeSegment(m.backend.version)) {
+        out.exitCode = 1;
+        out.error = "manifest backend name/version is not a valid path segment: '" +
+                    m.backend.name + "@" + m.backend.version + "'";
+        return out;
+    }
+
     // ── compatibility check (exit 4) ──────────────────────────────
     if (!satisfiesRange(coreVersion, m.backend.coreCompat)) {
         out.exitCode = 4;

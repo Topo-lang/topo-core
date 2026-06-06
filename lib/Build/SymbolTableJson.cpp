@@ -77,6 +77,30 @@ void from_json(const json& j, AccessPattern& p) {
         p = AccessPattern::None;
 }
 
+void to_json(json& j, PriorityLevel p) {
+    switch (p) {
+    case PriorityLevel::Critical: j = "critical"; break;
+    case PriorityLevel::High: j = "high"; break;
+    case PriorityLevel::Normal: j = "normal"; break;
+    case PriorityLevel::Low: j = "low"; break;
+    case PriorityLevel::Background: j = "background"; break;
+    }
+}
+
+void from_json(const json& j, PriorityLevel& p) {
+    auto s = j.get<std::string>();
+    if (s == "critical")
+        p = PriorityLevel::Critical;
+    else if (s == "high")
+        p = PriorityLevel::High;
+    else if (s == "low")
+        p = PriorityLevel::Low;
+    else if (s == "background")
+        p = PriorityLevel::Background;
+    else
+        p = PriorityLevel::Normal;
+}
+
 void to_json(json& j, TypeNode::Modifier m) {
     switch (m) {
     case TypeNode::None: j = "none"; break;
@@ -264,6 +288,9 @@ void to_json(json& j, const FunctionSymbol& s) {
     }
     if (s.accessPattern != AccessPattern::None) j["accessPattern"] = s.accessPattern;
     if (s.tiledSize > 0) j["tiledSize"] = s.tiledSize;
+    // @priority drives scheduling on the LLVM parallel backend; serialize it
+    // so declared priorities survive the symbol-table round-trip.
+    if (s.priority != PriorityLevel::Normal) j["priority"] = s.priority;
 }
 
 void from_json(const json& j, FunctionSymbol& s) {
@@ -293,6 +320,7 @@ void from_json(const json& j, FunctionSymbol& s) {
     }
     s.accessPattern = j.value("accessPattern", AccessPattern::None);
     s.tiledSize = j.value("tiledSize", 0);
+    s.priority = j.value("priority", PriorityLevel::Normal);
 }
 
 void to_json(json& j, const MemberVarSymbol& s) {
