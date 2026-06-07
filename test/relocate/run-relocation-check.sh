@@ -25,6 +25,12 @@ echo "$base" | grep -q "valid=1" || fail "baseline did not resolve (got: $base)"
 root="$(printf '%s\n' "$base" | sed -n 's/.* root=\([^ ]*\).*/\1/p')"
 [ -n "$root" ] && [ -d "$root/bin" ] || fail "baseline root invalid: '$root'"
 
+# resourceDir is best-effort: some host LLVM layouts (e.g. Apple Command Line
+# Tools clang) expose no lib/clang/<major> under the resolved root, so the
+# resolver legitimately reports an empty resourceDir. Record whether the
+# baseline produced one — only then does scenario 2 require it to relocate.
+baseResourceDir="$(printf '%s\n' "$base" | sed -n 's/.* resourceDir=\([^ ]*\).*/\1/p')"
+
 # --- scenario 2: TOPO_LLVM_DIR at a *different* path → resolver uses it ---
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
@@ -33,8 +39,12 @@ ln -s "$root" "$reloc"
 out2="$(TOPO_LLVM_DIR="$reloc" "$PROBE")" || fail "relocated resolve failed: $out2"
 echo "$out2" | grep -q "source=EnvVar" || fail "expected source=EnvVar, got: $out2"
 echo "$out2" | grep -q "root=$reloc" || fail "expected relocated root, got: $out2"
-echo "$out2" | grep -q "resourceDir=$reloc/lib/clang/" \
-    || fail "resourceDir not derived from relocated root: $out2"
+if [ -n "$baseResourceDir" ]; then
+    echo "$out2" | grep -q "resourceDir=$reloc/lib/clang/" \
+        || fail "resourceDir not derived from relocated root: $out2"
+else
+    echo "relocation-check: host LLVM exposes no resource dir; skipping resourceDir relocation assertion"
+fi
 
 # --- scenario 3: explicit but invalid TOPO_LLVM_DIR → hard fail, no silent fallback ---
 bogus="$tmp/not-llvm"
