@@ -1,15 +1,15 @@
-# Build artifacts
+# The e2e build suite runs these fixtures from a build-tree COPY (see
+# ../e2e/CMakeLists.txt), so a normal `ctest` run never writes here and the
+# checkout stays clean — no per-fixture binary names to enumerate.
+#
+# These rules are a defensive guard for a stray *manual* `topo-build` inside a
+# fixture: ignore the output KINDS, never individual files. Scoped to this
+# fixtures subtree, so the tracked test/topo-passes-sidecar/ *.topo-passes/
+# JSON fixtures are unaffected.
 **/build/
 **/.topo-cache/
-
-# Compiled binaries
-*/incremental_test
-*/rust_basic
-*/rust_runtime
-*/shared_lib
-*/hashlib_driver
-*/config_validation
-*/config_all_off
-*/config_all_on
-*/config_parallel_adaptive
-*/config_parallel_lifetime
+**/target/
+*.dSYM/
+*.ll
+*.topo-passes/
+Cargo.lock

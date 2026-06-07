@@ -7,9 +7,18 @@ endif()
 
 set(SHELL_TEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
+# Run the build fixtures from a build-tree COPY, never the in-source tree.
+# topo-build emits each project's executable, .topo-cache/, LLVM IR and (for
+# the rust fixture) a cargo target/ next to its Topo.toml; doing that in-source
+# permanently dirtied the checkout and forced fixtures/.gitignore to enumerate
+# every output by name. Copying to the build dir keeps the source pristine and
+# makes the per-binary ignore list unnecessary.
+set(E2E_FIXTURES_RUN_DIR "${CMAKE_CURRENT_BINARY_DIR}/run-fixtures")
+file(COPY "${TOPO_CORE_BUILD_FIXTURES_DIR}/" DESTINATION "${E2E_FIXTURES_RUN_DIR}")
+
 set(SHELL_TEST_ENV
     "TOPO_BUILD_EXE=$<TARGET_FILE:topo-build>"
-    "TOPO_FIXTURES_DIR=${TOPO_CORE_BUILD_FIXTURES_DIR}"
+    "TOPO_FIXTURES_DIR=${E2E_FIXTURES_RUN_DIR}"
     "TOPO_PROJECT_ROOT=${PROJECT_SOURCE_DIR}"
     "TOPO_LLVM_BINDIR=${TOPO_LLVM_BINDIR}"
 )
