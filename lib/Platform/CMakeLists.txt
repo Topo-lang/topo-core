@@ -17,6 +17,7 @@ target_include_directories(TopoPlatform PUBLIC
 
 target_compile_definitions(TopoPlatform PRIVATE
     TOPO_LLVM_BINDIR="${TOPO_LLVM_BINDIR}"
+    TOPO_LLVM_MAJOR="${TOPO_LLVM_MAJOR}"
 )
 
 # dlopen/dlsym on Unix (no-op on Windows)

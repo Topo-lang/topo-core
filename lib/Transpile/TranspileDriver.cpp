@@ -12,6 +12,7 @@
 #include "topo/Transpile/TopoSourceBuilder.h"
 #include "topo/Transpile/AdapterResolver.h"
 #include "topo/Platform/Process.h"
+#include "topo/Platform/ToolResolution.h"
 
 #include <nlohmann/json.hpp>
 
@@ -469,6 +470,11 @@ bool TranspileDriver::extractFunctions(HostLanguage lang,
     request["symbolTable"] = std::move(symJson);
 
     std::string requestStr = request.dump();
+
+    // Ensure a relocated extractor can load libclang/libLLVM from the resolved
+    // (possibly BYO) toolchain: prepend its lib dir to the child's loader path.
+    // No-op on the build host and when no toolchain is resolved.
+    platform::ensureLLVMLoaderPathForChildren();
 
     // Spawn the extractor: pipe JSON on stdin, read TranspileModule JSON on stdout
     platform::PipedProcess proc;

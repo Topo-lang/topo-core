@@ -6,8 +6,64 @@
 
 namespace topo::platform {
 
+/// A resolved LLVM toolchain: a single root from which every tool, the
+/// clang resource dir, and the lib dir derive. Resolved once per process by
+/// resolveLLVMToolchain() using a bring-your-own (BYO) priority chain so a
+/// pre-compiled binary locates LLVM wherever the user installed it, rather
+/// than the build host's absolute path.
+struct LLVMToolchain {
+    enum class Source {
+        None,               // nothing resolved
+        CliOverride,        // setLLVMToolchainOverride()
+        EnvVar,             // TOPO_LLVM_DIR (or legacy TOPO_LLVM_BINDIR env)
+        TopoCache,          // ~/.topo/toolchains/llvm/<ver>
+        PathDiscovery,      // clang-<major> / clang on PATH
+        WellKnownPrefix,    // brew / apt / scoop standard locations
+        CompileTimeDefault  // baked TOPO_LLVM_BINDIR (dev/build-tree only)
+    };
+    std::string root;        // LLVM install prefix (root/bin holds clang)
+    std::string binDir;      // root + "/bin"
+    std::string libDir;      // root + "/lib"
+    std::string resourceDir; // root + "/lib/clang/<major>" (derived; "" if absent)
+    std::string version;     // "X.Y.Z" when probed, else ""
+    Source source = Source::None;
+
+    bool valid() const { return !root.empty(); }
+};
+
+/// Resolve the LLVM toolchain once (cached process-wide) via the BYO-priority
+/// chain. Subsequent calls return the cached result without re-deriving.
+const LLVMToolchain& resolveLLVMToolchain();
+
+/// Pin the toolchain root (the explicit CLI flag / Topo.toml tier — highest
+/// priority). Must be called before the first resolveLLVMToolchain(); a later
+/// call has no effect. An empty root clears any pin.
+void setLLVMToolchainOverride(const std::string& root);
+
+/// Full path to an LLVM tool from the resolved toolchain, honouring the
+/// Windows ``.exe`` suffix. Falls back to the bare tool name (so the OS
+/// resolves it on PATH at exec) when no toolchain is resolved.
+std::string llvmToolPath(const std::string& toolName);
+
+/// The resolved clang++ path. Convenience for ``llvmToolPath("clang++")``.
+std::string llvmClangxx();
+
+/// The resolved clang resource dir (``root/lib/clang/<major>``), or an empty
+/// string when no toolchain resolved or the directory is absent. Callers pass
+/// it to libclang/clang via ``-resource-dir`` so builtin headers are found.
+std::string llvmResourceDir();
+
+/// Prepend the resolved toolchain's lib dir to this process's dynamic-loader
+/// search path so child processes spawned afterwards (e.g. topo-build-llvm-cpp,
+/// topo-extract-cpp) locate libLLVM/libclang from the resolved — possibly
+/// relocated — prefix. macOS uses DYLD_FALLBACK_LIBRARY_PATH (consulted only
+/// when an absolute install path fails to resolve, so it never shadows a
+/// correctly-loading libc++); Linux uses LD_LIBRARY_PATH; Windows uses PATH.
+/// Idempotent and a no-op when the toolchain is unresolved.
+void ensureLLVMLoaderPathForChildren();
+
 /// Resolve an LLVM tool (e.g. "clang++", "llvm-ar") to a full path.
-/// Priority: bundled TOPO_LLVM_BINDIR > PATH fallback.
+/// Thin shim over llvmToolPath() — kept for existing call sites.
 std::string resolveLLVMTool(const std::string& toolName);
 
 /// Locate an executable on PATH (cross-platform ``which``).

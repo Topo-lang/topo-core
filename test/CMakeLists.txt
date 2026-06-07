@@ -189,6 +189,9 @@ add_subdirectory(fuzz)
 # minimal-dist smoke ctest (label: minimal-dist)
 add_subdirectory(dist-smoke)
 
+# LLVM toolchain relocation ctest (label: relocate)
+add_subdirectory(relocate)
+
 # Sibling test subdirectories that used to be wired from the monorepo
 # root. Each guards on the targets / sources it actually depends on, so
 # they are safe to register unconditionally.
