@@ -229,6 +229,30 @@ std::optional<SymbolResult> LSPBridge::queryWorkspaceSymbol(const std::string& n
         return std::nullopt;
     }
 
+    // Defensively extract a SymbolResult. Per the LSP spec a WorkspaceSymbol's
+    // location may be just {uri} (range optional), and a non-conformant server
+    // may send wrong-typed fields — so check each access instead of blindly
+    // calling get<>(), which would throw and crash the bridge.
+    auto extract = [this](const json& sym) -> std::optional<SymbolResult> {
+        auto locIt = sym.find("location");
+        if (locIt == sym.end() || !locIt->is_object()) return std::nullopt;
+        auto uriIt = locIt->find("uri");
+        if (uriIt == locIt->end() || !uriIt->is_string()) return std::nullopt;
+        SymbolResult result;
+        result.file = uriToPath(uriIt->get<std::string>());
+        result.line = 0;
+        result.column = 0;
+        if (auto rangeIt = locIt->find("range"); rangeIt != locIt->end() && rangeIt->is_object()) {
+            if (auto startIt = rangeIt->find("start"); startIt != rangeIt->end() && startIt->is_object()) {
+                if (auto l = startIt->find("line"); l != startIt->end() && l->is_number_integer())
+                    result.line = l->get<int>();
+                if (auto c = startIt->find("character"); c != startIt->end() && c->is_number_integer())
+                    result.column = c->get<int>();
+            }
+        }
+        return result;
+    };
+
     // Find best match: prefer exact qualified name match
     for (const auto& sym : *response) {
         std::string symName = sym.value("name", "");
@@ -236,21 +260,12 @@ std::optional<SymbolResult> LSPBridge::queryWorkspaceSymbol(const std::string& n
         std::string fullName = containerName.empty() ? symName : containerName + "::" + symName;
 
         if (fullName == name || symName == query) {
-            SymbolResult result;
-            result.file = uriToPath(sym["location"]["uri"].get<std::string>());
-            result.line = sym["location"]["range"]["start"]["line"].get<int>();
-            result.column = sym["location"]["range"]["start"]["character"].get<int>();
-            return result;
+            if (auto r = extract(sym)) return r;
         }
     }
 
     // Fallback: return first result
-    const auto& first = (*response)[0];
-    SymbolResult result;
-    result.file = uriToPath(first["location"]["uri"].get<std::string>());
-    result.line = first["location"]["range"]["start"]["line"].get<int>();
-    result.column = first["location"]["range"]["start"]["character"].get<int>();
-    return result;
+    return extract((*response)[0]);
 }
 
 // ============================================================================

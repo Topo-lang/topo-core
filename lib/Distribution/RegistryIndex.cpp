@@ -34,6 +34,10 @@ IndexParseResult parseRegistryIndex(const std::string& jsonText,
     IndexParseResult result;
     RegistryIndex& idx = result.index;
 
+    // Type-mismatched fields (e.g. a numeric "name") make nlohmann value()/
+    // get<>() throw type_error; catch and fail closed rather than letting the
+    // exception escape and crash the caller.
+    try {
     idx.schema = j.value("schema", 0);
     if (idx.schema != 1)
         return fail(sourceLabel, "unsupported registry index schema (expected 1)");
@@ -84,6 +88,9 @@ IndexParseResult parseRegistryIndex(const std::string& jsonText,
             b.versions.push_back(std::move(v));
         }
         idx.backends.push_back(std::move(b));
+    }
+    } catch (const nlohmann::json::exception& e) {
+        return fail(sourceLabel, std::string("type mismatch in registry index: ") + e.what());
     }
 
     result.ok = true;
