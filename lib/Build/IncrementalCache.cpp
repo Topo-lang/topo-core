@@ -16,7 +16,10 @@ using json = nlohmann::json;
 
 namespace topo::build {
 
-static constexpr int CACHE_VERSION = 2;
+// v3: bumped so pre-existing on-disk manifests (written before the build
+// compared the config fingerprint on a cache hit) are invalidated once.
+// Must match CacheManifest's default version (the writer's source of truth).
+static constexpr int CACHE_VERSION = 3;
 
 IncrementalCache::IncrementalCache(const fs::path& projectDir) : projectDir_(projectDir) {}
 
@@ -60,7 +63,7 @@ bool IncrementalCache::loadManifest(CacheManifest& out) const {
     }
 }
 
-void IncrementalCache::saveManifest(const CacheManifest& m) const {
+bool IncrementalCache::saveManifest(const CacheManifest& m) const {
     json j;
     j["version"] = m.version;
     j["configFingerprint"] = m.configFingerprint;
@@ -73,7 +76,14 @@ void IncrementalCache::saveManifest(const CacheManifest& m) const {
 
     fs::path manifestPath = cacheDir() / "manifest.json";
     std::ofstream ofs(manifestPath);
+    // Surface write failures instead of leaving an inconsistent on-disk cache
+    // silently — mirrors saveSymbolTable/saveVisibilityEntries. A half-written
+    // manifest paired with valid symbols/visibility would be the dangerous
+    // case (loadManifest rejects on parse error, so an unopened stream is the
+    // benign miss; a stream that opens but fails mid-write is the one to catch).
+    if (!ofs.is_open()) return false;
     ofs << j.dump(2);
+    return ofs.good();
 }
 
 // ===================================================================

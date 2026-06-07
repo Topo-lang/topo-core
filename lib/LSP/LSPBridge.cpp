@@ -1,11 +1,15 @@
 #include "topo/LSP/LSPBridge.h"
 
+#include <algorithm>
+#include <cctype>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <string>
 
 namespace topo::lsp {
 
@@ -463,14 +467,31 @@ void LSPBridge::readerLoop() {
 // ============================================================================
 
 void LSPBridge::parseSemanticTokenLegend() {
+    // Extract a string array from a JSON node, skipping non-string elements.
+    // get<std::vector<std::string>>() on a non-array, or on an array holding a
+    // non-string element, throws json::type_error; this runs at bridge startup
+    // on server-supplied capabilities (untrusted), so a malformed legend must
+    // degrade to an empty/partial list rather than throw out of start().
+    auto extractStringArray = [](const json& node) {
+        std::vector<std::string> out;
+        if (!node.is_array()) return out;  // non-array legend → leave empty
+        out.reserve(node.size());
+        for (const auto& el : node) {
+            if (el.is_string()) out.push_back(el.get<std::string>());
+            // A non-string element is skipped: it has no index meaning anyway,
+            // and the typeIndex/bit lookups already bounds-check the result.
+        }
+        return out;
+    };
+
     if (serverCapabilities_.contains("semanticTokensProvider")) {
         auto& stp = serverCapabilities_["semanticTokensProvider"];
         if (stp.contains("legend")) {
             auto& legend = stp["legend"];
             if (legend.contains("tokenTypes"))
-                tokenTypes_ = legend["tokenTypes"].get<std::vector<std::string>>();
+                tokenTypes_ = extractStringArray(legend["tokenTypes"]);
             if (legend.contains("tokenModifiers"))
-                tokenModifiers_ = legend["tokenModifiers"].get<std::vector<std::string>>();
+                tokenModifiers_ = extractStringArray(legend["tokenModifiers"]);
         }
     }
 }
@@ -539,10 +560,17 @@ std::vector<LSPBridge::SemanticToken> LSPBridge::getSemanticTokens(const std::st
         token.type = (typeIndex >= 0 && typeIndex < static_cast<int>(tokenTypes_.size()))
                      ? tokenTypes_[typeIndex] : "unknown";
 
-        // Decode modifier bitmask
+        // Decode modifier bitmask. `1 << bit` on a plain (signed) int is UB
+        // once bit >= 31 (shift into/past the sign bit) — a server legend may
+        // declare >= 31 modifiers. Use an unsigned 32-bit mask and bound the
+        // bit index to the 32 representable bits (modifierBits arrives as a
+        // 32-bit semantic-tokens field, so bits >= 32 cannot be set anyway).
         std::string mods;
-        for (size_t bit = 0; bit < tokenModifiers_.size(); ++bit) {
-            if (modifierBits & (1 << bit)) {
+        const auto modBits = static_cast<uint32_t>(modifierBits);
+        const size_t maxBit =
+            std::min<size_t>(tokenModifiers_.size(), 32u);
+        for (size_t bit = 0; bit < maxBit; ++bit) {
+            if (modBits & (1u << bit)) {
                 if (!mods.empty()) mods += ",";
                 mods += tokenModifiers_[bit];
             }
@@ -888,12 +916,43 @@ std::string LSPBridge::pathToUri(const std::string& path) {
         if (!ec) p = abs;
     }
     std::string normalized = p.generic_string();
+
+    // Percent-encode so pathToUri is the inverse of uriToPath. Without this a
+    // path containing a literal '%' (or a space / non-ASCII byte) round-trips
+    // into a different file identity (and a bare '%' would even produce a
+    // malformed escape that uriToPath then has to defend against). Keep the
+    // RFC 3986 unreserved set verbatim, plus '/' (the path separator) and ':'
+    // (the Windows drive colon); encode every other byte as %XX. Treat the
+    // string as raw bytes (cast to unsigned char) so UTF-8 is encoded octet by
+    // octet.
+    auto encode = [](const std::string& s) {
+        static const char* kHex = "0123456789ABCDEF";
+        std::string out;
+        out.reserve(s.size());
+        for (unsigned char c : s) {
+            bool unreserved = (c >= 'A' && c <= 'Z') ||
+                              (c >= 'a' && c <= 'z') ||
+                              (c >= '0' && c <= '9') ||
+                              c == '-' || c == '.' || c == '_' || c == '~' ||
+                              c == '/' || c == ':';
+            if (unreserved) {
+                out += static_cast<char>(c);
+            } else {
+                out += '%';
+                out += kHex[(c >> 4) & 0xF];
+                out += kHex[c & 0xF];
+            }
+        }
+        return out;
+    };
+    std::string encoded = encode(normalized);
+
     // Unix: path starts with / → file:// + /path = file:///path
     // Windows: path is C:/path → file:/// + C:/path = file:///C:/path
-    if (!normalized.empty() && normalized[0] == '/') {
-        return "file://" + normalized;
+    if (!encoded.empty() && encoded[0] == '/') {
+        return "file://" + encoded;
     }
-    return "file:///" + normalized;
+    return "file:///" + encoded;
 }
 
 std::string LSPBridge::uriToPath(const std::string& uri) {
@@ -901,10 +960,18 @@ std::string LSPBridge::uriToPath(const std::string& uri) {
     if (uri.size() > prefix.size() && uri.substr(0, prefix.size()) == prefix) {
         // After "file://" the path starts: /path (Unix) or /C:/path (Windows)
         std::string raw = uri.substr(prefix.size());
-        // Decode percent-encoded characters
+        // Decode percent-encoded characters. A bare std::stoi on the two
+        // escape chars throws std::invalid_argument when they are not hex
+        // (e.g. "%ZZ" / "%g1"), which would unwind out of every handler that
+        // calls uriToPath (no exception barrier) and std::terminate. Validate
+        // BOTH chars with std::isxdigit (cast to unsigned char) first; on a
+        // malformed escape, emit the literal '%' and continue. (Mirrors the
+        // topo-lsp uriToPath fix.)
         std::string decoded;
         for (size_t i = 0; i < raw.size(); ++i) {
-            if (raw[i] == '%' && i + 2 < raw.size()) {
+            if (raw[i] == '%' && i + 2 < raw.size() &&
+                std::isxdigit(static_cast<unsigned char>(raw[i + 1])) &&
+                std::isxdigit(static_cast<unsigned char>(raw[i + 2]))) {
                 auto hex = raw.substr(i + 1, 2);
                 decoded += static_cast<char>(std::stoi(hex, nullptr, 16));
                 i += 2;

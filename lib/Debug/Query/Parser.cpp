@@ -54,6 +54,14 @@ public:
         return false;
     }
 
+    // True when the next token (after spaces) is a `..` range rather than a
+    // single field-access `.`. Lets parsePostfix avoid consuming the first dot
+    // of a slice range (e.g. the `1` start of `x[1..3]`) as a field access.
+    bool atRange() {
+        skipSpaces();
+        return pos_ + 1 < src_.size() && src_[pos_] == '.' && src_[pos_ + 1] == '.';
+    }
+
     size_t pos() const { return pos_; }
     bool atEnd() const { return pos_ >= src_.size(); }
     char current() const { return pos_ < src_.size() ? src_[pos_] : '\0'; }
@@ -259,7 +267,10 @@ private:
 
     ExprPtr parsePostfix(ExprPtr base) {
         while (true) {
-            if (lex_.consume('.')) {
+            // A `..` is a slice range, not a field-access dot — leave it for the
+            // enclosing slice parser (otherwise `x[1..3]` reads `1.` as a field
+            // access and fails with "expected field name after '.'").
+            if (!lex_.atRange() && lex_.consume('.')) {
                 size_t pos = 0;
                 std::string name = lex_.tryIdent(&pos);
                 if (name.empty()) {

@@ -91,8 +91,11 @@ private:
     std::vector<std::pair<std::string, int>> collectCandidates() const;
 
     /// Run build command, then test command.
-    /// Returns true if both succeed.
-    bool runBuildAndTest(std::string& error);
+    /// Returns true if both succeed. On failure, `compileFailed` is set to
+    /// true when the build step (not the test step) was the cause, so the
+    /// caller can classify compile vs test failures from the actual exit
+    /// code rather than string-matching the error text.
+    bool runBuildAndTest(std::string& error, bool& compileFailed);
 
     /// Check if a function name matches the filter pattern (simple substring).
     bool matchesFilter(const std::string& funcName) const;

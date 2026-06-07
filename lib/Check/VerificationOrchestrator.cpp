@@ -11,16 +11,42 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <map>
 #include <set>
 #include <sstream>
+#include <utility>
 
 namespace fs = std::filesystem;
 
 namespace topo::check {
 
 namespace {
+
+/// RAII guard that runs a restore action on every scope exit (normal return
+/// or an in-flight exception thrown by build/test/IO). The stub→run→restore
+/// window must never leave the user's working-tree source stubbed: a throw
+/// between stub and restore would otherwise corrupt their source silently.
+/// Restoration is idempotent and may be disarmed once the explicit restore
+/// (whose return value we check) has already run on the success path.
+class RestoreGuard {
+public:
+    explicit RestoreGuard(std::function<void()> restore) : restore_(std::move(restore)) {}
+    ~RestoreGuard() {
+        if (armed_ && restore_) restore_();
+    }
+    /// Disarm after an explicit, return-value-checked restore on the
+    /// success path so the destructor does not redundantly re-write files.
+    void disarm() { armed_ = false; }
+
+    RestoreGuard(const RestoreGuard&) = delete;
+    RestoreGuard& operator=(const RestoreGuard&) = delete;
+
+private:
+    std::function<void()> restore_;
+    bool armed_ = true;
+};
 
 /// Split a command string into executable and arguments.
 /// Handles simple quoting (double quotes only).
@@ -90,12 +116,23 @@ bool VerificationOrchestrator::runBuildAndTest(std::string& error) {
 
     if (result.exitCode != 0) {
         error = "command failed (exit " + std::to_string(result.exitCode) + ")";
-        if (!result.stdoutOutput.empty()) {
-            // Truncate output to avoid flooding
-            if (result.stdoutOutput.size() > 500) {
-                error += ": " + result.stdoutOutput.substr(0, 500) + "...";
+        // Compiler errors and most test-runner detail go to stderr, not
+        // stdout — surfacing stdout alone yields a near-empty, unactionable
+        // diagnostic. Prefer stderr when stdout is empty, otherwise show both.
+        std::string detail = result.stdoutOutput;
+        if (!result.stderrOutput.empty()) {
+            if (detail.empty()) {
+                detail = result.stderrOutput;
             } else {
-                error += ": " + result.stdoutOutput;
+                detail += "\n[stderr]\n" + result.stderrOutput;
+            }
+        }
+        if (!detail.empty()) {
+            // Truncate output to avoid flooding.
+            if (detail.size() > 500) {
+                error += ": " + detail.substr(0, 500) + "...";
+            } else {
+                error += ": " + detail;
             }
         }
         return false;
@@ -172,23 +209,56 @@ VerificationResult VerificationOrchestrator::verifyStageIsolation() {
                 tr.stubbedFunction = stubFunc;
                 tr.checkedProperty = "stage " + std::to_string(stage) + " isolation in " + blockName;
 
+                // RAII: guarantee the stubbed file is restored on EVERY exit
+                // path — including an exception thrown by runBuildAndTest /
+                // runProcessCapture / IO between here and the explicit restore.
+                // Without this, a throw leaves the user's source stubbed.
+                bool restoreOk = true;
+                RestoreGuard guard([&] {
+                    restoreOk = stubGen_->restoreFile(srcFile, stubRes);
+                });
+
                 std::string buildError;
-                tr.compileSuccess = true; // assume compilation works
                 tr.testSuccess = runBuildAndTest(buildError);
+                // Only a single combined build+test command is available here,
+                // so compile and test failures are not separable. Derive
+                // compileSuccess from the actual run result instead of
+                // hardcoding true: on a nonzero exit we cannot claim the
+                // compile succeeded (it may be a compile error caused by the
+                // stub), so report it as unsuccessful rather than misclassify.
+                tr.compileSuccess = tr.testSuccess;
 
                 if (!tr.testSuccess) {
                     // If tests fail after stubbing a same-stage peer, it means
                     // there's an unexpected dependency within the stage.
                     tr.error = buildError;
-                    ++result.failCount;
-                } else {
+                }
+
+                // Explicit, return-value-checked restore on the normal path;
+                // disarm the guard so the destructor does not re-write.
+                restoreOk = stubGen_->restoreFile(srcFile, stubRes);
+                guard.disarm();
+                if (!restoreOk) {
+                    // Restore failed — the user's source is now left stubbed.
+                    // Surface it as a hard failure rather than silently
+                    // continuing, and mark the result inconclusive.
+                    tr.testSuccess = false;
+                    tr.compileSuccess = false;
+                    std::string note = "failed to restore source file after stubbing " +
+                                       stubFunc + " (" + srcFile + "); working-tree source may be modified";
+                    tr.error = tr.error.empty() ? note : (tr.error + "; " + note);
+                    std::cerr << "error: " << note << "\n";
+                }
+
+                // Tally after restore so a restore failure counts as a failure,
+                // not a pass.
+                if (tr.testSuccess) {
                     ++result.passCount;
+                } else {
+                    ++result.failCount;
                 }
 
                 result.tests.push_back(tr);
-
-                // Restore
-                stubGen_->restoreFile(srcFile, stubRes);
             }
         }
     }
@@ -257,6 +327,28 @@ VerificationResult VerificationOrchestrator::verifyPipelineIndependence() {
             std::vector<std::pair<std::string, StubResult>> stubs;
             bool stubFailed = false;
 
+            // Restore each touched file exactly once, from the FIRST stub
+            // recorded for it: the stub generator captures whole-file content
+            // per call, so a second function stubbed in the same file captured
+            // already-stubbed content. Writing that snapshot back would
+            // re-apply the first stub and corrupt the user's source. Returns
+            // false if any file failed to restore (source left modified).
+            auto restoreAll = [&]() -> bool {
+                bool allOk = true;
+                std::set<std::string> restored;
+                for (auto& [sf, sr] : stubs) {
+                    if (!restored.insert(sf).second) continue;
+                    if (!stubGen_->restoreFile(sf, sr)) allOk = false;
+                }
+                return allOk;
+            };
+
+            // RAII: guarantee every stubbed file is restored on EVERY exit
+            // path from the stub loop and the build/test run below — including
+            // an exception thrown by stubFunction / runBuildAndTest / IO.
+            // Disarmed only after the explicit restore on the normal path.
+            RestoreGuard guard([&] { restoreAll(); });
+
             for (const auto& func : branchFuncs) {
                 std::string srcFile = findSourceFileForFunction(func);
                 if (srcFile.empty()) continue;
@@ -267,16 +359,10 @@ VerificationResult VerificationOrchestrator::verifyPipelineIndependence() {
                     stubs.push_back({srcFile, stubRes});
                 } else {
                     stubFailed = true;
-                    // Restore any stubs already applied. Restore each file only
-                    // once, from the FIRST stub recorded for it: its
-                    // originalContent is the true whole-file original. Multiple
-                    // branch functions can share a source file, and a later
-                    // stub of that file captured already-stubbed content.
-                    std::set<std::string> restored;
-                    for (auto& [sf, sr] : stubs) {
-                        if (!restored.insert(sf).second) continue;
-                        stubGen_->restoreFile(sf, sr);
-                    }
+                    // Restore any stubs already applied (per-file dedup) before
+                    // bailing; disarm the guard since we restore here directly.
+                    restoreAll();
+                    guard.disarm();
                     break;
                 }
             }
@@ -297,28 +383,42 @@ VerificationResult VerificationOrchestrator::verifyPipelineIndependence() {
             tr.checkedProperty = "branch independence in " + blockName;
 
             std::string buildError;
-            tr.compileSuccess = true;
             tr.testSuccess = runBuildAndTest(buildError);
+            // Single combined build+test command: compile and test failures
+            // are not separable, so derive compileSuccess from the run result
+            // rather than hardcoding true (a stub-induced compile error must
+            // not be reported as a successful compile).
+            tr.compileSuccess = tr.testSuccess;
 
             if (!tr.testSuccess) {
                 tr.error = buildError;
-                ++result.failCount;
-            } else {
+            }
+
+            // Explicit, return-value-checked restore on the normal path; then
+            // disarm the guard so the destructor does not re-write the files.
+            bool restoreOk = restoreAll();
+            guard.disarm();
+            if (!restoreOk) {
+                // At least one branch file could not be restored — the user's
+                // source is left stubbed. Surface it as a hard failure instead
+                // of silently continuing, and mark the result inconclusive.
+                tr.testSuccess = false;
+                tr.compileSuccess = false;
+                std::string note = "failed to restore branch source file(s) after stubbing branch from " +
+                                   branchRoot + "; working-tree source may be modified";
+                tr.error = tr.error.empty() ? note : (tr.error + "; " + note);
+                std::cerr << "error: " << note << "\n";
+            }
+
+            // Tally after restore so a restore failure counts as a failure,
+            // not a pass.
+            if (tr.testSuccess) {
                 ++result.passCount;
+            } else {
+                ++result.failCount;
             }
 
             result.tests.push_back(tr);
-
-            // Restore all stubs. Restore each file only once, from the FIRST
-            // stub recorded for it: the stub generator captures whole-file
-            // content per call, so a second function stubbed in the same file
-            // captured already-stubbed content. Writing that snapshot back
-            // would re-apply the first stub and corrupt the user's source.
-            std::set<std::string> restored;
-            for (auto& [sf, sr] : stubs) {
-                if (!restored.insert(sf).second) continue;
-                stubGen_->restoreFile(sf, sr);
-            }
         }
     }
 

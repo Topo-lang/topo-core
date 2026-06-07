@@ -45,6 +45,13 @@ private:
     void formatComptimeIf(const IfDecl& node, int indent);
     void formatComptimeIfMember(const ASTNode& member, int indent);
 
+    // Re-emit an unhandled top-level node verbatim from its source span so
+    // formatting never deletes content it does not know how to pretty-print
+    // (e.g. a top-level `debug T { ... }` declaration). Returns false when
+    // the span could not be recovered (no source / out-of-range line), in
+    // which case the caller must avoid claiming the node was emitted.
+    bool emitVerbatimNode(const ASTNode& node, int indent);
+
     // Parameter formatting
     std::string renderParams(const std::vector<Parameter>& params);
     std::string renderReturnParams(const std::vector<ReturnParam>& params);
@@ -52,6 +59,13 @@ private:
     // Source text extraction for expressions
     std::string extractSourceLine(int line) const;
     std::string extractParenContent(int fromLine) const;
+    // Extract a brace-balanced block span starting at `fromLine` (the line of
+    // the node's leading token). Returns the verbatim source lines from the
+    // opening line through the line containing the matching `}`. When no `{`
+    // is seen on/after `fromLine`, returns just that single line (covers a
+    // hypothetical brace-less top-level form). Empty when source is absent or
+    // the line is out of range.
+    std::string extractBlockSpan(int fromLine) const;
 
     // Import sorting
     std::vector<const ASTNode*> sortedImports(const std::vector<ASTNodePtr>& decls) const;

@@ -202,7 +202,14 @@ EvalResult builtinMin(const FrameView& v) {
         v, [](double a, double x) { return x < a ? x : a; },
         std::numeric_limits<double>::infinity(), tyOk);
     if (!tyOk) return err("min: unsupported dtype " + v.layout().dtype);
-    if (isIntegralDtype(v.layout().dtype)) {
+    // Range-check the double→int64_t cast exactly as builtinSum does: casting a
+    // double outside [INT64_MIN, INT64_MAX] to int64_t is UB, and a u64 value
+    // above INT64_MAX has already lost precision as a double. Fall back to a
+    // float result when the value cannot be represented exactly as int64_t.
+    if (isIntegralDtype(v.layout().dtype) &&
+        acc >= static_cast<double>(std::numeric_limits<int64_t>::min()) &&
+        acc <= static_cast<double>(std::numeric_limits<int64_t>::max()) &&
+        std::trunc(acc) == acc) {
         return ok(Value::makeInt(static_cast<int64_t>(acc)));
     }
     return ok(Value::makeFloat(acc));
@@ -218,7 +225,13 @@ EvalResult builtinMax(const FrameView& v) {
         v, [](double a, double x) { return x > a ? x : a; },
         -std::numeric_limits<double>::infinity(), tyOk);
     if (!tyOk) return err("max: unsupported dtype " + v.layout().dtype);
-    if (isIntegralDtype(v.layout().dtype)) {
+    // Same UB-avoiding range guard on the double→int64_t cast as builtinMin /
+    // builtinSum: only emit an int when the folded value is exactly
+    // representable in int64_t, else surface it as a float.
+    if (isIntegralDtype(v.layout().dtype) &&
+        acc >= static_cast<double>(std::numeric_limits<int64_t>::min()) &&
+        acc <= static_cast<double>(std::numeric_limits<int64_t>::max()) &&
+        std::trunc(acc) == acc) {
         return ok(Value::makeInt(static_cast<int64_t>(acc)));
     }
     return ok(Value::makeFloat(acc));
@@ -306,14 +319,41 @@ EvalResult sliceFrame(const FrameView& parent, int64_t start, int64_t end) {
         rowElems *= parent.layout().shape[i];
     }
     size_t elemSize = dtypeSize(parent.layout().dtype);
-    size_t byteOffset = static_cast<size_t>(start) * static_cast<size_t>(rowElems) * elemSize;
-    size_t byteLen = static_cast<size_t>(end - start) * static_cast<size_t>(rowElems) * elemSize;
+
+    // A strided parent (a struct field-access view such as `p.x`) does NOT lay
+    // its dim0 rows contiguously: consecutive logical elements are spaced by
+    // the parent struct's stride, not by `elemSize`. Stepping dim0 by
+    // `rowElems * elemSize` here would read the wrong (contiguous) bytes — the
+    // very bug this fixes. So when the parent is strided we step dim0 by the
+    // parent's effective element stride and PROPAGATE that stride to the child
+    // (via setElemStride below) instead of clearing it.
+    bool parentStrided = parent.isStrided();
+    uint64_t parentStride = parent.effectiveElemStride();
+    size_t dim0Step = parentStrided ? static_cast<size_t>(parentStride)
+                                    : static_cast<size_t>(rowElems) * elemSize;
+    size_t byteOffset = static_cast<size_t>(start) * dim0Step;
+
+    // Byte extent of the slice. For a strided view the last element occupies
+    // [(count-1)*stride, (count-1)*stride + elemSize); the span must reach the
+    // end of that last element, not count*stride (which would over-read by one
+    // stride's worth of trailing padding past the buffer end). For a
+    // contiguous view the rows are packed so count*step is exact.
+    int64_t count = end - start;
+    size_t byteLen;
+    if (parentStrided) {
+        byteLen = count > 0
+                      ? static_cast<size_t>(count - 1) * dim0Step + elemSize
+                      : 0;
+    } else {
+        byteLen = static_cast<size_t>(count) * dim0Step;
+    }
 
     LayoutDescriptor newLayout = parent.layout();
-    newLayout.shape[0] = end - start;
+    newLayout.shape[0] = count;
     if (!newLayout.strides.empty()) {
-        // We keep strides empty (canonical contiguous) for sliced view to keep
-        // downstream reductions on the fast path.
+        // We keep the layout `strides` vector empty for the sliced view; the
+        // strided fold path consults the FrameView's elemStride directly (set
+        // below), matching how struct field-access views are constructed.
         newLayout.strides.clear();
     }
 
@@ -321,6 +361,12 @@ EvalResult sliceFrame(const FrameView& parent, int64_t start, int64_t end) {
     FrameView fv = FrameView::reference(parent.variable() + "[" + std::to_string(start) +
                                             ".." + std::to_string(end) + "]",
                                         sub, std::move(newLayout));
+    // Carry the parent element stride onto the child so a slice of a strided
+    // (field-access) view keeps reading stride-spaced elements rather than
+    // collapsing to a contiguous read.
+    if (parentStrided) {
+        fv.setElemStride(parentStride);
+    }
     return ok(Value::makeFrame(std::move(fv)));
 }
 
@@ -827,11 +873,18 @@ private:
         int64_t l = lhs.value.intVal;
         int64_t r = rhs.value.intVal;
         int64_t out = 0;
+        // Signed overflow on int64_t is undefined behavior. Detect it with the
+        // checked-arithmetic builtins and report a clean evaluation error
+        // instead of invoking UB and emitting a garbage diagnostic number.
+        bool overflow = false;
         switch (e.binaryOp) {
-            case BinaryOpKind::Add: out = l + r; break;
-            case BinaryOpKind::Sub: out = l - r; break;
-            case BinaryOpKind::Mul: out = l * r; break;
+            case BinaryOpKind::Add: overflow = __builtin_add_overflow(l, r, &out); break;
+            case BinaryOpKind::Sub: overflow = __builtin_sub_overflow(l, r, &out); break;
+            case BinaryOpKind::Mul: overflow = __builtin_mul_overflow(l, r, &out); break;
             case BinaryOpKind::Div: return err("internal: int / handled in float branch");
+        }
+        if (overflow) {
+            return err(std::string("integer overflow in '") + label + "'");
         }
         return ok(Value::makeInt(out));
     }

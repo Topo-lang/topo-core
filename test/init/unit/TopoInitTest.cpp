@@ -176,6 +176,61 @@ TEST(TopoGeneratorTest, JavaTypeBindings) {
     EXPECT_EQ(content.find("std::cpp17"), std::string::npos);
 }
 
+TEST(TopoGeneratorTest, TypeScriptTypeBindings) {
+    std::vector<HostSymbol> syms = {
+        makeSymbol("app::init", "init", HostSymbolKind::Function, Visibility::Public),
+    };
+
+    TopoGenerator gen(HostLanguage::TypeScript, "myproject");
+    auto result = gen.generate(syms, "src/**/*.ts");
+
+    ASSERT_FALSE(result.topoFiles.empty());
+    const auto& content = result.topoFiles[0].content;
+
+    // TypeScript bindings must alias the TS type names (number/string/boolean)
+    // to std::typescript::*. The divergent provider once emitted
+    // `using int = std::typescript::number` — the LHS must be `number`, not a
+    // C++/Python-style name, or the alias resolves nothing in V8 codegen.
+    EXPECT_NE(content.find("using number = std::typescript::number;"), std::string::npos);
+    EXPECT_NE(content.find("using string = std::typescript::string;"), std::string::npos);
+    EXPECT_NE(content.find("using boolean = std::typescript::boolean;"), std::string::npos);
+    EXPECT_EQ(content.find("using int = std::typescript"), std::string::npos);
+}
+
+TEST(TopoGeneratorTest, PythonTypeBindings) {
+    std::vector<HostSymbol> syms = {
+        makeSymbol("app::init", "init", HostSymbolKind::Function, Visibility::Public),
+    };
+
+    TopoGenerator gen(HostLanguage::Python, "myproject");
+    auto result = gen.generate(syms, "src/**/*.py");
+
+    ASSERT_FALSE(result.topoFiles.empty());
+    const auto& content = result.topoFiles[0].content;
+
+    EXPECT_NE(content.find("using int = std::python::int;"), std::string::npos);
+    EXPECT_NE(content.find("using str = std::python::str;"), std::string::npos);
+    EXPECT_EQ(content.find("std::cpp17"), std::string::npos);
+}
+
+TEST(TopoGeneratorTest, PythonTopoTomlSchema) {
+    std::vector<HostSymbol> syms = {
+        makeSymbol("app::init", "init", HostSymbolKind::Function, Visibility::Public),
+    };
+
+    TopoGenerator gen(HostLanguage::Python, "myproject");
+    auto result = gen.generate(syms, "src/**/*.py");
+
+    const auto& toml = result.topoToml;
+    // Python Topo.toml must follow the same [project]/topo/main.topo/src/
+    // [completeness] schema every other language uses.
+    EXPECT_NE(toml.find("name = \"myproject\""), std::string::npos);
+    EXPECT_NE(toml.find("root = \"topo/main.topo\""), std::string::npos);
+    EXPECT_NE(toml.find("language = \"python\""), std::string::npos);
+    EXPECT_NE(toml.find("sources = [\"src/**/*.py\"]"), std::string::npos);
+    EXPECT_NE(toml.find("ignore_main = true"), std::string::npos);
+}
+
 TEST(TopoGeneratorTest, TopoTomlGeneration) {
     std::vector<HostSymbol> syms = {
         makeSymbol("app::init", "init", HostSymbolKind::Function, Visibility::Public),
@@ -352,4 +407,90 @@ TEST_F(InitConfigFSTest, CollectSourceFilesCpp) {
         if (f.find(".cpp") != std::string::npos) hasCpp = true;
     }
     EXPECT_TRUE(hasCpp);
+}
+
+TEST_F(InitConfigFSTest, CollectSourceFilesPython) {
+    // Regression: collectSourceFiles had no Python branch, so it returned an
+    // empty vector and `topo init` aborted with "no source files found" for
+    // Python projects even though detectLanguage/matchesExtension handle .py.
+    createFile("src/main.py");
+    createFile("src/util.py");
+    createFile("src/pkg/mod.py");
+    createFile("top_level.py");
+    createFile("src/notes.txt"); // non-source, must be ignored
+
+    auto files = collectSourceFiles(tempDir_.string(), HostLanguage::Python);
+
+    EXPECT_GE(files.size(), 3u);
+    bool hasPy = false;
+    bool hasTxt = false;
+    for (const auto& f : files) {
+        EXPECT_FALSE(f.empty()); // never insert an empty path
+        if (f.find(".py") != std::string::npos) hasPy = true;
+        if (f.find(".txt") != std::string::npos) hasTxt = true;
+    }
+    EXPECT_TRUE(hasPy);
+    EXPECT_FALSE(hasTxt);
+}
+
+TEST_F(InitConfigFSTest, CollectSourceFilesTypeScript) {
+    // Regression: same missing-branch gap as Python — .ts/.tsx projects
+    // returned empty and could not be scaffolded.
+    createFile("src/main.ts");
+    createFile("src/component.tsx");
+    createFile("src/sub/helper.ts");
+
+    auto files = collectSourceFiles(tempDir_.string(), HostLanguage::TypeScript);
+
+    EXPECT_GE(files.size(), 3u);
+    for (const auto& f : files)
+        EXPECT_FALSE(f.empty());
+}
+
+TEST_F(InitConfigFSTest, CollectSourceFilesSkipsDanglingSymlink) {
+    // Regression (throwing FS ops): a dangling symlink in src/ used to make
+    // the throwing is_regular_file()/operator++ raise filesystem_error out of
+    // a try/catch-less caller, terminating the tool. With the ec-overloads the
+    // bad entry is skipped and real sources are still collected. Also asserts
+    // no empty "" path leaks in when canonical() fails on the broken link.
+    createFile("src/main.cpp");
+    std::error_code ec;
+    fs::create_symlink(tempDir_ / "src" / "does_not_exist.cpp",
+                       tempDir_ / "src" / "broken.cpp", ec);
+    if (ec) GTEST_SKIP() << "symlink creation unsupported: " << ec.message();
+
+    auto files = collectSourceFiles(tempDir_.string(), HostLanguage::Cpp);
+
+    // The real source survives; no crash, no empty string.
+    bool hasMain = false;
+    for (const auto& f : files) {
+        EXPECT_FALSE(f.empty());
+        if (f.find("main.cpp") != std::string::npos) hasMain = true;
+    }
+    EXPECT_TRUE(hasMain);
+}
+
+TEST_F(InitConfigFSTest, DetectLanguageSurvivesDanglingSymlink) {
+    // Regression (throwing FS ops): detectLanguage's status queries used the
+    // throwing overloads; a dangling symlink would terminate the tool. It must
+    // now skip the broken entry and still detect the dominant language.
+    createFile("a.cpp");
+    createFile("b.cpp");
+    std::error_code ec;
+    fs::create_symlink(tempDir_ / "missing_target.cpp",
+                       tempDir_ / "dangling.cpp", ec);
+    if (ec) GTEST_SKIP() << "symlink creation unsupported: " << ec.message();
+
+    // Must not throw / terminate.
+    auto lang = detectLanguage(tempDir_.string());
+    EXPECT_EQ(lang, HostLanguage::Cpp);
+}
+
+TEST_F(InitConfigFSTest, CollectSourceFilesPythonEmptyWhenNoSources) {
+    // Sanity: with no .py files the result is empty (so main.cpp's
+    // "no source files found" guard still fires) rather than carrying junk.
+    createFile("README.md");
+
+    auto files = collectSourceFiles(tempDir_.string(), HostLanguage::Python);
+    EXPECT_TRUE(files.empty());
 }

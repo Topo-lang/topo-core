@@ -175,6 +175,24 @@ void to_json(json& j, const TypeNode& t) {
     if (t.isTemplateParam) j["isTemplateParam"] = true;
     if (t.isVariadic) j["isVariadic"] = true;
     if (t.nonTypeValue) j["nonTypeValue"] = *t.nonTypeValue;
+    // Stdlib bridging identity. Serialize as the stable lowercase keyword
+    // (round-trips through fromKeyword) only when this is a stdlib type, so
+    // isStdlib() survives the round-trip — previously it was dropped and
+    // reset to TypeId::None on reload.
+    if (t.isStdlib()) j["stdlibId"] = stdlib::keywordOf(t.stdlibId);
+    // record<...>/union<...> named fields. Order is significant (cross-language
+    // byte layout, and the union discriminant tag is field 0), so we keep
+    // declaration order and serialize each field's nested TypeNode recursively.
+    if (!t.recordFields.empty()) {
+        json rf = json::array();
+        for (const auto& f : t.recordFields) {
+            json fj = json::object();
+            fj["name"] = f.name;
+            fj["type"] = f.type(); // recurse — nested stdlib composites round-trip
+            rf.push_back(std::move(fj));
+        }
+        j["recordFields"] = std::move(rf);
+    }
 }
 
 void from_json(const json& j, TypeNode& t) {
@@ -186,6 +204,22 @@ void from_json(const json& j, TypeNode& t) {
     t.isTemplateParam = j.value("isTemplateParam", false);
     t.isVariadic = j.value("isVariadic", false);
     if (j.contains("nonTypeValue")) t.nonTypeValue = j["nonTypeValue"].get<int>();
+    // Restore the stdlib identity (defaults to None when the key is absent —
+    // a non-stdlib type or a legacy payload predating this field).
+    if (j.contains("stdlibId")) {
+        t.stdlibId = stdlib::fromKeyword(j["stdlibId"].get<std::string>());
+    }
+    // Restore record/union fields, preserving declaration order and the
+    // single-element typeBox invariant each RecordField relies on.
+    if (j.contains("recordFields")) {
+        t.recordFields.clear();
+        for (const auto& fj : j["recordFields"]) {
+            TypeNode::RecordField f;
+            f.name = fj.at("name").get<std::string>();
+            f.typeBox.push_back(fj.at("type").get<TypeNode>());
+            t.recordFields.push_back(std::move(f));
+        }
+    }
 }
 
 // ===================================================================
@@ -461,6 +495,10 @@ void to_json(json& j, const LogicBlockEntry& e) {
         j["isPipeline"] = true;
         j["edges"] = e.edges;
     }
+    // `isFlow` marks a block that came from a `flow` declaration; it waives the
+    // orphan-fn-block rule and gates single-predecessor pipeline handling.
+    // Serialize it so a reloaded table does not silently reset it to false.
+    if (e.isFlow) j["isFlow"] = true;
     if (e.pipelineAnalysis) j["pipelineAnalysis"] = *e.pipelineAnalysis;
 }
 
@@ -471,6 +509,7 @@ void from_json(const json& j, LogicBlockEntry& e) {
     j.at("stages").get_to(e.stages);
     e.isPipeline = j.value("isPipeline", false);
     if (j.contains("edges")) j["edges"].get_to(e.edges);
+    e.isFlow = j.value("isFlow", false);
     if (j.contains("pipelineAnalysis")) e.pipelineAnalysis = j["pipelineAnalysis"].get<PipelineAnalysis>();
 }
 

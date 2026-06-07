@@ -7,14 +7,37 @@
 #include "topo/Platform/Process.h"
 
 #include <algorithm>
+#include <functional>
 #include <iostream>
 #include <set>
 #include <sstream>
+#include <utility>
 #include <vector>
 
 namespace topo::check {
 
 namespace {
+
+/// RAII guard that runs a restore action on every scope exit (normal return
+/// or an in-flight exception thrown by build/test/IO). The stub→run→restore
+/// window must never leave the user's working-tree source stubbed: a throw
+/// between stub and restore would otherwise corrupt their source silently.
+/// Disarmed once the explicit, return-value-checked restore has run.
+class RestoreGuard {
+public:
+    explicit RestoreGuard(std::function<void()> restore) : restore_(std::move(restore)) {}
+    ~RestoreGuard() {
+        if (armed_ && restore_) restore_();
+    }
+    void disarm() { armed_ = false; }
+
+    RestoreGuard(const RestoreGuard&) = delete;
+    RestoreGuard& operator=(const RestoreGuard&) = delete;
+
+private:
+    std::function<void()> restore_;
+    bool armed_ = true;
+};
 
 /// Split a command string into executable and arguments.
 /// Handles simple quoting (double quotes only).
@@ -71,11 +94,22 @@ bool PruningOrchestrator::runBuildAndTest(std::string& error) {
 
     if (result.exitCode != 0) {
         error = "command failed (exit " + std::to_string(result.exitCode) + ")";
-        if (!result.stdoutOutput.empty()) {
-            if (result.stdoutOutput.size() > 500) {
-                error += ": " + result.stdoutOutput.substr(0, 500) + "...";
+        // Compiler errors and most test-runner detail go to stderr, not
+        // stdout — surfacing stdout alone yields a near-empty, unactionable
+        // diagnostic. Prefer stderr when stdout is empty, otherwise show both.
+        std::string detail = result.stdoutOutput;
+        if (!result.stderrOutput.empty()) {
+            if (detail.empty()) {
+                detail = result.stderrOutput;
             } else {
-                error += ": " + result.stdoutOutput;
+                detail += "\n[stderr]\n" + result.stderrOutput;
+            }
+        }
+        if (!detail.empty()) {
+            if (detail.size() > 500) {
+                error += ": " + detail.substr(0, 500) + "...";
+            } else {
+                error += ": " + detail;
             }
         }
         return false;
@@ -138,17 +172,40 @@ StageIsolationResult PruningOrchestrator::verifyStage(int targetStage) {
 
     result.stubbedFunctions = rewriteResult.stubbedFunctions;
 
+    // RAII: guarantee every stubbed file is restored on EVERY exit path —
+    // including an exception thrown by runBuildAndTest / IO between here and
+    // the explicit restore. Without this, a throw leaves the user's source
+    // stubbed. Disarmed after the explicit, return-value-checked restore.
+    RestoreGuard guard([&] { rewriter_->restore(rewriteResult); });
+
     // Run build + test
     std::string buildError;
-    result.compileSuccess = true;
     result.testSuccess = runBuildAndTest(buildError);
+    // Single combined build+test command: compile and test failures are not
+    // separable, so derive compileSuccess from the run result rather than
+    // hardcoding true (a stub-induced compile error must not be reported as a
+    // successful compile).
+    result.compileSuccess = result.testSuccess;
 
     if (!result.testSuccess) {
         result.error = buildError;
     }
 
-    // Restore
-    rewriter_->restore(rewriteResult);
+    // Explicit, return-value-checked restore on the normal path; disarm the
+    // guard so the destructor does not re-write the files.
+    bool restoreOk = rewriter_->restore(rewriteResult);
+    guard.disarm();
+    if (!restoreOk) {
+        // Restore failed — the user's source is left stubbed. Surface it as a
+        // hard failure instead of silently continuing, and mark the result
+        // inconclusive (passed() requires both compile and test success).
+        result.compileSuccess = false;
+        result.testSuccess = false;
+        std::string note = "failed to restore source file(s) after stubbing stage < " +
+                           std::to_string(targetStage) + "; working-tree source may be modified";
+        result.error = result.error.empty() ? note : (result.error + "; " + note);
+        std::cerr << "error: " << note << "\n";
+    }
 
     return result;
 }

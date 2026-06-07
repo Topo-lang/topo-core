@@ -89,19 +89,22 @@ if(TOPO_CORE_WITH_LANG)
         unit/TemplateEngineTest.cpp
         unit/PassReportsLoaderTest.cpp
         unit/EvaluatorStructTest.cpp
+        unit/FormatterTest.cpp
         unit/DistributionTest.cpp
+        unit/LSPBridgeTest.cpp
         build/PassCategoryRegistryTest.cpp
     )
     # TopoBuildLib PUBLIC-propagates TopoLang → TopoCheck; each per-language
     # transpile lib (TopoCppTranspile / ...) PUBLIC-depends on TopoTranspile.
     # Explicit TopoCheck and TopoTranspile were the duplicates.
     target_link_libraries(topo-core-tests PRIVATE
-        TopoTransform TopoDebug
+        TopoTransform TopoDebug TopoFormat
         topo::lang-cpp::TopoCppTranspile
         topo::lang-rust::TopoRustTranspile
         topo::lang-java::TopoJavaTranspile
         topo::lang-python::TopoPythonTranspile
         TopoBuildLib TopoDistribution
+        TopoLSPBridge
         nlohmann_json::nlohmann_json
         GTest::gtest_main
     )

@@ -186,12 +186,22 @@ void Formatter::formatFile(const TopoFile& ast) {
         needBlank = true;
     }
 
-    // Rest (namespaces, etc.)
+    // Rest (namespaces, debug decls, and any future top-level kind).
     for (const auto* node : rest) {
         if (needBlank) emitBlankLine();
         emitCommentsBefore(node->location.line, 0);
         if (node->kind == ASTKind::NamespaceDecl) {
             formatNamespace(static_cast<const NamespaceDecl&>(*node), 0);
+        } else {
+            // Any node the formatter does not pretty-print (e.g. a top-level
+            // `debug T { ... }` DebugDecl) MUST still survive the round-trip:
+            // re-emit its verbatim source span rather than silently dropping
+            // it. Dropping was a live data-loss bug on the LSP "format
+            // document" path, which writes formatter output back with no
+            // semantic-verifier gate. If the span cannot be recovered we leave
+            // the node out rather than emit garbage — but that is the
+            // unreachable fallback, not the normal path.
+            emitVerbatimNode(*node, 0);
         }
         needBlank = true;
     }
@@ -674,6 +684,71 @@ std::string Formatter::extractParenContent(int fromLine) const {
     if (start == std::string::npos) return "";
     size_t end = inner.find_last_not_of(" \t");
     return inner.substr(start, end - start + 1);
+}
+
+std::string Formatter::extractBlockSpan(int fromLine) const {
+    if (!source_ || fromLine < 1) return "";
+    std::istringstream stream(*source_);
+    std::string lineStr;
+    int currentLine = 0;
+    std::string out;
+    int depth = 0;
+    bool sawOpen = false;
+    while (std::getline(stream, lineStr)) {
+        ++currentLine;
+        if (currentLine < fromLine) continue;
+        if (!out.empty()) out += '\n';
+        out += lineStr;
+        // Track brace depth across the whole accumulated span so the block
+        // ends on the line that closes the brace opened on (or after) the
+        // node's first line. String/comment-aware scanning is unnecessary
+        // here: this path only handles declarations that came out of the
+        // parser, and we re-emit the bytes verbatim regardless of nesting.
+        for (char c : lineStr) {
+            if (c == '{') {
+                ++depth;
+                sawOpen = true;
+            } else if (c == '}') {
+                --depth;
+            }
+        }
+        // Single-line / brace-less form: stop after the first line.
+        if (!sawOpen) break;
+        if (sawOpen && depth <= 0) break;
+    }
+    return out;
+}
+
+bool Formatter::emitVerbatimNode(const ASTNode& node, int indent) {
+    std::string span = extractBlockSpan(node.location.line);
+    if (span.empty()) return false;
+    // Re-emit the captured source line-by-line, preserving the original
+    // text. We re-apply the formatter's indentation to the leading line only;
+    // inner lines keep their source indentation so balanced blocks (e.g. a
+    // `render method = id { ... }` raw body inside a DebugDecl) stay intact.
+    std::istringstream stream(span);
+    std::string lineStr;
+    bool firstLine = true;
+    int lineCount = 0;
+    while (std::getline(stream, lineStr)) {
+        if (firstLine) {
+            emitIndent(indent);
+            firstLine = false;
+        }
+        emit(lineStr);
+        emitLine();
+        ++lineCount;
+    }
+    // The verbatim span already carries any comments that lived inside it.
+    // Advance the comment cursor past every comment on those lines so the
+    // final drain loop in format() does not re-emit them a second time —
+    // double-emission would also break the format(format(x)) fixed point.
+    int endLine = node.location.line + (lineCount > 0 ? lineCount - 1 : 0);
+    while (nextCommentIdx_ < comments_->size() &&
+           (*comments_)[nextCommentIdx_].location.line <= endLine) {
+        ++nextCommentIdx_;
+    }
+    return true;
 }
 
 void Formatter::formatTypeDecl(const TypeDecl& cls, int indent) {

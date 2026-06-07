@@ -160,3 +160,77 @@ TEST(EvaluatorStructShapeAndCount, LayoutBuiltinsBypassDtypeGuard) {
     ASSERT_EQ(dtype.value.kind, ValueKind::String);
     EXPECT_EQ(dtype.value.strVal, "struct");
 }
+
+// --- Slicing a strided (struct field-access) view ---
+//
+// Before the fix, sliceFrame stepped dim0 by `rowElems * elemSize`
+// (contiguous), so `sum(p.x[1..3])` folded the f32 at bytes 4 and 8
+// (which are the FIRST element's y and z fields), yielding 2+3 = 5
+// instead of the x column at rows 1 and 2 (4 and 7), which sum to 11.
+TEST(EvaluatorStructFieldAccess, SliceOfStridedFieldFoldsStrideSpaced) {
+    Environment env;
+    env.variables.emplace("p", makeParticleView());
+
+    // x column is {1, 4, 7, 10}; rows [1..3) → {4, 7}.
+    auto rx = run("sum(p.x[1..3])", env);
+    ASSERT_TRUE(rx.ok) << rx.error;
+    ASSERT_EQ(rx.value.kind, ValueKind::Float);
+    EXPECT_DOUBLE_EQ(rx.value.floatVal, 11.0);
+
+    // y column is {2, 5, 8, 11}; rows [0..2) → {2, 5} → 7.
+    auto ry = run("sum(p.y[0..2])", env);
+    ASSERT_TRUE(ry.ok) << ry.error;
+    ASSERT_EQ(ry.value.kind, ValueKind::Float);
+    EXPECT_DOUBLE_EQ(ry.value.floatVal, 7.0);
+
+    // z column is {3, 6, 9, 12}; max over rows [2..4) → {9, 12} → 12.
+    auto mz = run("max(p.z[2..4])", env);
+    ASSERT_TRUE(mz.ok) << mz.error;
+    ASSERT_EQ(mz.value.kind, ValueKind::Float);
+    EXPECT_DOUBLE_EQ(mz.value.floatVal, 12.0);
+
+    // count over a sliced strided view reflects the slice length.
+    auto cnt = run("count(p.x[1..3])", env);
+    ASSERT_TRUE(cnt.ok) << cnt.error;
+    ASSERT_EQ(cnt.value.kind, ValueKind::Int);
+    EXPECT_EQ(cnt.value.intVal, 2);
+}
+
+// --- Integer overflow in evalBinaryOp returns an error, not UB ---
+
+TEST(EvaluatorArithmeticOverflow, AddOverflowReportsError) {
+    Environment env; // no frame needed — pure scalar arithmetic
+    auto r = run("9000000000000000000 + 9000000000000000000", env);
+    EXPECT_FALSE(r.ok);
+    EXPECT_NE(r.error.find("integer overflow"), std::string::npos) << r.error;
+    EXPECT_NE(r.error.find("+"), std::string::npos) << r.error;
+}
+
+TEST(EvaluatorArithmeticOverflow, MulOverflowReportsError) {
+    Environment env;
+    auto r = run("9000000000000000000 * 2", env);
+    EXPECT_FALSE(r.ok);
+    EXPECT_NE(r.error.find("integer overflow"), std::string::npos) << r.error;
+    EXPECT_NE(r.error.find("*"), std::string::npos) << r.error;
+}
+
+TEST(EvaluatorArithmeticOverflow, SubOverflowReportsError) {
+    Environment env;
+    // INT64_MIN - 1 underflows.
+    auto r = run("-9223372036854775807 - 2", env);
+    EXPECT_FALSE(r.ok);
+    EXPECT_NE(r.error.find("integer overflow"), std::string::npos) << r.error;
+}
+
+TEST(EvaluatorArithmeticOverflow, InRangeArithmeticStillWorks) {
+    Environment env;
+    auto add = run("2 + 3", env);
+    ASSERT_TRUE(add.ok) << add.error;
+    ASSERT_EQ(add.value.kind, ValueKind::Int);
+    EXPECT_EQ(add.value.intVal, 5);
+
+    auto mul = run("100 * 100", env);
+    ASSERT_TRUE(mul.ok) << mul.error;
+    ASSERT_EQ(mul.value.kind, ValueKind::Int);
+    EXPECT_EQ(mul.value.intVal, 10000);
+}

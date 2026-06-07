@@ -113,18 +113,21 @@ TEST_F(IncrementalCacheTest, ManifestRoundTrip) {
     IncrementalCache cache(testDir);
     cache.ensureDirectories();
 
+    // Use the struct's default version (the single source of truth the loader
+    // requires); do not hardcode a literal that would silently drift from
+    // CACHE_VERSION the way the original topo-build writer did.
     CacheManifest m;
-    m.version = 2;
+    const int liveVersion = m.version;
     m.configFingerprint = "abc123";
     m.topoTomlMtime = 1234567890;
     m.topoFileMtimes["main.topo"] = 100;
     m.topoFileMtimes["engine.topo"] = 200;
 
-    cache.saveManifest(m);
+    ASSERT_TRUE(cache.saveManifest(m));
 
     CacheManifest loaded;
     ASSERT_TRUE(cache.loadManifest(loaded));
-    EXPECT_EQ(loaded.version, 2);
+    EXPECT_EQ(loaded.version, liveVersion);
     EXPECT_EQ(loaded.configFingerprint, "abc123");
     EXPECT_EQ(loaded.topoTomlMtime, 1234567890);
     EXPECT_EQ(loaded.topoFileMtimes.size(), 2u);
@@ -150,6 +153,64 @@ TEST_F(IncrementalCacheTest, ManifestVersionMismatch) {
 
     CacheManifest loaded;
     EXPECT_FALSE(cache.loadManifest(loaded)) << "Version mismatch should cause load failure";
+}
+
+// --- Config-fingerprint invalidation (item 5) ---
+//
+// Regression for the config fingerprint that was written into the manifest but
+// never compared on a cache hit. A manifest produced for one config must be
+// rejected by isCompileConfigValid when the compile-affecting config changes,
+// otherwise a build whose config changed while .topo files were untouched would
+// reuse stale cached symbols/visibility.
+TEST_F(IncrementalCacheTest, CompileConfigInvalidatesOnChange) {
+    IncrementalCache cache(testDir);
+    cache.ensureDirectories();
+
+    BuildConfig cfg1;
+    cfg1.hostCompilerPath = "/usr/bin/clang++";
+    cfg1.standard = "c++17";
+    cfg1.sources = {"src/main.cpp"};
+
+    // Write a manifest the way topo-build does: stamp the live fingerprint.
+    CacheManifest m;
+    m.configFingerprint = IncrementalCache::computeConfigFingerprint(cfg1);
+    ASSERT_TRUE(cache.saveManifest(m));
+
+    CacheManifest loaded;
+    ASSERT_TRUE(cache.loadManifest(loaded));
+
+    // Same config -> fingerprint matches -> cache is reusable.
+    EXPECT_TRUE(cache.isCompileConfigValid(loaded, cfg1));
+
+    // Compile-affecting config changed (different compiler) while .topo files
+    // were untouched -> fingerprint must mismatch -> cache invalidated.
+    BuildConfig cfg2 = cfg1;
+    cfg2.hostCompilerPath = "/opt/clang-16/bin/clang++";
+    EXPECT_FALSE(cache.isCompileConfigValid(loaded, cfg2))
+        << "A compile-config change must invalidate the frontend cache";
+}
+
+// --- saveManifest failure path ---
+//
+// saveManifest now returns bool and checks stream state, so the caller never
+// reports a successful cache write when the stream could not be opened. Make
+// the manifest path un-openable (a directory occupies the target name) and
+// confirm the failure surfaces instead of being silently swallowed.
+TEST_F(IncrementalCacheTest, SaveManifestReportsStreamFailure) {
+    IncrementalCache cache(testDir);
+    cache.ensureDirectories();
+
+    // Occupy "manifest.json" with a directory so opening it as a file fails.
+    fs::path manifestPath = cache.cacheDir() / "manifest.json";
+    std::error_code ec;
+    fs::remove_all(manifestPath, ec);
+    fs::create_directories(manifestPath, ec);
+    ASSERT_TRUE(fs::is_directory(manifestPath));
+
+    CacheManifest m;
+    m.configFingerprint = "wont-be-written";
+    EXPECT_FALSE(cache.saveManifest(m))
+        << "saveManifest must report failure when the manifest stream cannot be opened";
 }
 
 // --- SymbolTable JSON round-trip ---

@@ -8,12 +8,35 @@
 #include "topo/Platform/Process.h"
 
 #include <algorithm>
+#include <functional>
 #include <iostream>
 #include <sstream>
+#include <utility>
 
 namespace topo::check {
 
 namespace {
+
+/// RAII guard that runs a restore action on every scope exit (normal return
+/// or an in-flight exception thrown by build/test/IO). The stub→run→restore
+/// window must never leave the user's working-tree source stubbed: a throw
+/// between stub and restore would otherwise corrupt their source silently.
+/// Disarmed once the explicit, return-value-checked restore has run.
+class RestoreGuard {
+public:
+    explicit RestoreGuard(std::function<void()> restore) : restore_(std::move(restore)) {}
+    ~RestoreGuard() {
+        if (armed_ && restore_) restore_();
+    }
+    void disarm() { armed_ = false; }
+
+    RestoreGuard(const RestoreGuard&) = delete;
+    RestoreGuard& operator=(const RestoreGuard&) = delete;
+
+private:
+    std::function<void()> restore_;
+    bool armed_ = true;
+};
 
 /// Split a command string into executable and arguments.
 /// Handles simple quoting (double quotes only).
@@ -65,11 +88,22 @@ bool runCommand(const std::string& cmd, const std::string& workDir,
 
     if (result.exitCode != 0) {
         error = "command failed (exit " + std::to_string(result.exitCode) + ")";
-        if (!result.stdoutOutput.empty()) {
-            if (result.stdoutOutput.size() > 500) {
-                error += ": " + result.stdoutOutput.substr(0, 500) + "...";
+        // Compiler errors and most test-runner detail go to stderr, not
+        // stdout — surfacing stdout alone yields a near-empty, unactionable
+        // diagnostic. Prefer stderr when stdout is empty, otherwise show both.
+        std::string detail = result.stdoutOutput;
+        if (!result.stderrOutput.empty()) {
+            if (detail.empty()) {
+                detail = result.stderrOutput;
             } else {
-                error += ": " + result.stdoutOutput;
+                detail += "\n[stderr]\n" + result.stderrOutput;
+            }
+        }
+        if (!detail.empty()) {
+            if (detail.size() > 500) {
+                error += ": " + detail.substr(0, 500) + "...";
+            } else {
+                error += ": " + detail;
             }
         }
         return false;
@@ -123,12 +157,17 @@ bool StubVerificationCheck::matchesFilter(const std::string& funcName) const {
     return funcName.find(config_.filterPattern) != std::string::npos;
 }
 
-bool StubVerificationCheck::runBuildAndTest(std::string& error) {
-    // Run build command first (if provided)
+bool StubVerificationCheck::runBuildAndTest(std::string& error, bool& compileFailed) {
+    compileFailed = false;
+
+    // Run build command first (if provided). Its exit code authoritatively
+    // tells compile vs test apart, so report the phase via compileFailed
+    // rather than relying on the caller to string-match the message.
     if (!config_.buildCommand.empty()) {
         std::string buildError;
         if (!runCommand(config_.buildCommand, config_.projectDir, config_.verbose, buildError)) {
             error = "build failed: " + buildError;
+            compileFailed = true;
             return false;
         }
     }
@@ -169,36 +208,59 @@ StubVerifyFunctionResult StubVerificationCheck::verifyFunction(const std::string
     }
 
     if (rewriteResult.stubbedFunctions.empty()) {
-        // Function not found in any source file — skip
+        // Function not found in any source file — skip. Nothing was written
+        // (originalContents is empty), but still check the restore return so
+        // an unexpected failure is not silently swallowed.
         result.error = "function not found in source files";
-        rewriter_->restore(rewriteResult);
+        if (!rewriter_->restore(rewriteResult)) {
+            std::cerr << "error: failed to restore source after no-op stub of "
+                      << qualifiedName << "\n";
+        }
         return result;
     }
 
+    // RAII: guarantee the stubbed source is restored on EVERY exit path —
+    // including an exception thrown by runBuildAndTest / IO between here and
+    // the explicit restore. Without this, a throw leaves the user's source
+    // stubbed. Disarmed after the explicit, return-value-checked restore.
+    RestoreGuard guard([&] { rewriter_->restore(rewriteResult); });
+
     // Run build + test
     std::string buildTestError;
-    bool ok = runBuildAndTest(buildTestError);
+    bool compileFailed = false;
+    bool ok = runBuildAndTest(buildTestError, compileFailed);
 
     if (ok) {
         result.compileSuccess = true;
         result.testSuccess = true;
+    } else if (compileFailed) {
+        // Build step failed — classified from its actual exit code (not a
+        // string match), so a stub-induced compile error is reported as a
+        // compile failure rather than a test failure.
+        result.compileSuccess = false;
+        result.error = buildTestError;
     } else {
-        // Distinguish compile failure from test failure
-        // If buildCommand is separate, we can tell them apart.
-        // With a combined command, we treat it as test failure
-        // (compilation is a prerequisite).
-        if (buildTestError.find("build failed") != std::string::npos) {
-            result.compileSuccess = false;
-            result.error = buildTestError;
-        } else {
-            result.compileSuccess = true;
-            result.testSuccess = false;
-            result.error = buildTestError;
-        }
+        // Compilation succeeded; the test step failed (hidden dependency).
+        result.compileSuccess = true;
+        result.testSuccess = false;
+        result.error = buildTestError;
     }
 
-    // Restore original source
-    rewriter_->restore(rewriteResult);
+    // Explicit, return-value-checked restore on the normal path; disarm the
+    // guard so the destructor does not re-write the source.
+    bool restoreOk = rewriter_->restore(rewriteResult);
+    guard.disarm();
+    if (!restoreOk) {
+        // Restore failed — the user's source is left stubbed. Surface it as a
+        // hard failure instead of silently continuing, and mark the result
+        // inconclusive (passed() requires both compile and test success).
+        result.compileSuccess = false;
+        result.testSuccess = false;
+        std::string note = "failed to restore source after stubbing " + qualifiedName +
+                           "; working-tree source may be modified";
+        result.error = result.error.empty() ? note : (result.error + "; " + note);
+        std::cerr << "error: " << note << "\n";
+    }
 
     return result;
 }

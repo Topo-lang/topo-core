@@ -8,6 +8,7 @@
 #include "topo/Analysis/StageAnalysis.h"
 
 #include <gtest/gtest.h>
+#include <filesystem>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -63,6 +64,32 @@ TEST(StubRewriter, RestoreEmptyResult) {
     emptyResult.success = true;
 
     EXPECT_TRUE(rewriter.restore(emptyResult));
+}
+
+// Regression (#3 — restore return must be honored): restore() returns false
+// when a target path cannot be opened for writing. PruningOrchestrator and
+// StubVerificationCheck now propagate this bool to mark the verification
+// inconclusive; this test pins the StubRewriter contract those checks rely on.
+// A directory path cannot be opened with ofstream on any supported platform,
+// so it deterministically forces the open-failure branch.
+TEST(StubRewriter, RestoreReportsFailureWhenTargetUnwritable) {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "topo_stubrewriter_restore_fail";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+
+    auto stubGen = std::make_unique<MockStubGen>();
+    StubRewriter rewriter(std::move(stubGen), {});
+
+    StubRewriteResult result;
+    result.success = true;
+    // Key is a directory path → ofstream open fails → restore reports false.
+    result.originalContents[dir.string()] = "irrelevant content";
+
+    EXPECT_FALSE(rewriter.restore(result))
+        << "restore must report failure when a file cannot be written back";
+
+    fs::remove_all(dir);
 }
 
 // --- PruningOrchestrator Tests ---

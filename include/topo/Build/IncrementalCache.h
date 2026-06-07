@@ -17,7 +17,13 @@ struct BuildConfig;
 
 /// Persistent state stored in .topo-cache/manifest.json.
 struct CacheManifest {
-    int version = 2;
+    // v3: pre-existing on-disk manifests were written before the build
+    // actually compared the config fingerprint on a cache hit. Bumping the
+    // version invalidates those once, so a stale frontend cache cannot be
+    // reused across a config change that the old (uncompared) fingerprint
+    // never guarded against. Stays the single source of truth — the loader's
+    // CACHE_VERSION and this default must match.
+    int version = 3;
     std::string configFingerprint;                 // compile-config hash
     std::map<std::string, int64_t> topoFileMtimes; // .topo path -> mtime
     int64_t topoTomlMtime = 0;                     // Topo.toml mtime
@@ -37,7 +43,10 @@ public:
     // --- Manifest ---
 
     bool loadManifest(CacheManifest& out) const;
-    void saveManifest(const CacheManifest& m) const;
+    /// Returns false if the manifest stream could not be opened or the write
+    /// failed — consistent with saveSymbolTable/saveVisibilityEntries, so the
+    /// caller never reports a successful cache write when the stream failed.
+    bool saveManifest(const CacheManifest& m) const;
 
     // --- Validity checks ---
 
