@@ -390,8 +390,16 @@ CapturedProcessResult runProcessCaptureWithTimeout(
 
 struct PipedProcessImpl {
     reproc::process process;
-    bool started = false;
-    bool stdinClosed = false;
+    // Flags are atomic because the reader thread (read/readByte) observes
+    // `started` while the control thread (stop/isRunning) flips it, and
+    // `stdinClosed` is likewise touched from both sides. ctlMutex serializes
+    // the stop()/isRunning() control transition (concurrent reproc control
+    // calls on one handle are not guaranteed safe); it is deliberately NOT
+    // held across a blocking read, so stop() can always interrupt a stalled
+    // reader without deadlock.
+    std::atomic<bool> started{false};
+    std::atomic<bool> stdinClosed{false};
+    std::mutex ctlMutex;
 };
 
 namespace {
@@ -401,17 +409,20 @@ std::mutex& implsMutex() {
     return m;
 }
 
-std::unordered_map<const PipedProcess*, std::unique_ptr<PipedProcessImpl>>&
+std::unordered_map<const PipedProcess*, std::shared_ptr<PipedProcessImpl>>&
 impls() {
     static std::unordered_map<const PipedProcess*,
-                              std::unique_ptr<PipedProcessImpl>> m;
+                              std::shared_ptr<PipedProcessImpl>> m;
     return m;
 }
 
-PipedProcessImpl* findImpl(const PipedProcess* self) {
+// Returns a shared_ptr copy taken under the map mutex, so a concurrent
+// start()/destructor that swaps or erases the map slot cannot free the impl
+// while this caller still holds it.
+std::shared_ptr<PipedProcessImpl> findImpl(const PipedProcess* self) {
     std::lock_guard<std::mutex> lock(implsMutex());
     auto it = impls().find(self);
-    return it == impls().end() ? nullptr : it->second.get();
+    return it == impls().end() ? nullptr : it->second;
 }
 
 void eraseImpl(const PipedProcess* self) {
@@ -431,13 +442,14 @@ bool PipedProcess::start(const std::string& executable,
     // reproc::process is single-use: after stop() it cannot be restarted.
     // Tear down any prior impl so a restart cycle gets a fresh process.
     // Refuse a true double-start (start called twice without stop in between).
+    std::shared_ptr<PipedProcessImpl> impl;
     {
         std::lock_guard<std::mutex> lock(implsMutex());
         auto& slot = impls()[this];
         if (slot && slot->started) return false;
-        slot = std::make_unique<PipedProcessImpl>();
+        slot = std::make_shared<PipedProcessImpl>();
+        impl = slot;
     }
-    auto& impl = *findImpl(this);
 
     reproc::options options;
     options.redirect.in.type = reproc::redirect::pipe;
@@ -445,14 +457,15 @@ bool PipedProcess::start(const std::string& executable,
     options.redirect.err.type = reproc::redirect::parent;
 
     auto argv = buildArgv(executable, args);
-    std::error_code ec = impl.process.start(argv, options);
+    std::lock_guard<std::mutex> guard(impl->ctlMutex);
+    std::error_code ec = impl->process.start(argv, options);
     if (ec) return false;
-    impl.started = true;
+    impl->started = true;
     return true;
 }
 
 bool PipedProcess::write(const void* data, size_t len) {
-    auto* impl = findImpl(this);
+    auto impl = findImpl(this);
     if (!impl || !impl->started || impl->stdinClosed) return false;
     const auto* buf = static_cast<const uint8_t*>(data);
     size_t remaining = len;
@@ -466,7 +479,7 @@ bool PipedProcess::write(const void* data, size_t len) {
 }
 
 int PipedProcess::readByte() {
-    auto* impl = findImpl(this);
+    auto impl = findImpl(this);
     if (!impl || !impl->started) return -1;
     uint8_t b;
     auto [n, ec] = impl->process.read(reproc::stream::out, &b, 1);
@@ -475,7 +488,7 @@ int PipedProcess::readByte() {
 }
 
 size_t PipedProcess::read(void* buf, size_t len) {
-    auto* impl = findImpl(this);
+    auto impl = findImpl(this);
     if (!impl || !impl->started) return 0;
     auto [n, ec] = impl->process.read(reproc::stream::out,
                                       static_cast<uint8_t*>(buf), len);
@@ -484,14 +497,14 @@ size_t PipedProcess::read(void* buf, size_t len) {
 }
 
 void PipedProcess::closeStdin() {
-    auto* impl = findImpl(this);
+    auto impl = findImpl(this);
     if (!impl || !impl->started || impl->stdinClosed) return;
     impl->process.close(reproc::stream::in);
     impl->stdinClosed = true;
 }
 
 void PipedProcess::closePipes() {
-    auto* impl = findImpl(this);
+    auto impl = findImpl(this);
     if (!impl || !impl->started) return;
     if (!impl->stdinClosed) {
         impl->process.close(reproc::stream::in);
@@ -502,8 +515,16 @@ void PipedProcess::closePipes() {
 }
 
 void PipedProcess::stop(int timeoutMs) {
-    auto* impl = findImpl(this);
+    auto impl = findImpl(this);
     if (!impl || !impl->started) return;
+
+    // Serialize the control transition against a concurrent isRunning(): both
+    // call into the same reproc::process and flip `started`. Every reproc call
+    // here is time-bounded (wait/terminate/kill all carry deadlines), so this
+    // lock never blocks indefinitely — a reader thread blocked in read() holds
+    // no lock, so stop() always reaches process.stop() to interrupt it.
+    std::lock_guard<std::mutex> guard(impl->ctlMutex);
+    if (!impl->started) return;
 
     // wait → terminate → kill. Matches the previous SIGTERM/TerminateProcess
     // + blocking waitpid behavior.
@@ -517,8 +538,12 @@ void PipedProcess::stop(int timeoutMs) {
 }
 
 bool PipedProcess::isRunning() const {
-    auto* impl = findImpl(this);
+    auto impl = findImpl(this);
     if (!impl || !impl->started) return false;
+    // Same control mutex as stop(): the non-blocking wait below and stop()'s
+    // bounded stop sequence must not run concurrently on one reproc handle.
+    std::lock_guard<std::mutex> guard(impl->ctlMutex);
+    if (!impl->started) return false;
     // Non-blocking wait — timed_out → still alive; success → reap + capture
     // status so a subsequent exitCode() call returns it (mirrors the old
     // waitpid(WNOHANG) reap path).
