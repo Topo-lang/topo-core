@@ -237,7 +237,7 @@ std::optional<SymbolResult> LSPBridge::queryWorkspaceSymbol(const std::string& n
     // location may be just {uri} (range optional), and a non-conformant server
     // may send wrong-typed fields — so check each access instead of blindly
     // calling get<>(), which would throw and crash the bridge.
-    auto extract = [this](const json& sym) -> std::optional<SymbolResult> {
+    auto extract = [](const json& sym) -> std::optional<SymbolResult> {
         auto locIt = sym.find("location");
         if (locIt == sym.end() || !locIt->is_object()) return std::nullopt;
         auto uriIt = locIt->find("uri");

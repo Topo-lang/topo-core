@@ -216,8 +216,26 @@ bool convertJfrNdjsonStream(std::istream& in,
     // sample-only recording stays byte-for-byte identical to pre-Plan-42
     // output (same "absent, not empty" convention as topo-profile's
     // span pass_events handling).
+    //
+    // In hybrid mode `outJson` already carries span-collected pass_events
+    // (LLVM-side routePassEvent). A blind assignment here would CLOBBER those
+    // span events with only the JFR-side ones; instead MERGE per-pass — append
+    // this stream's events to each pass's existing array so both sources
+    // survive in one trace.
     if (!passEvents.empty()) {
-        outJson["pass_events"] = std::move(passEvents);
+        if (outJson.contains("pass_events") && outJson["pass_events"].is_object()) {
+            nlohmann::json& dst = outJson["pass_events"];
+            for (auto& [pass, evs] : passEvents.items()) {
+                if (!dst.contains(pass) || !dst[pass].is_array()) {
+                    dst[pass] = nlohmann::json::array();
+                }
+                for (auto& ev : evs) {
+                    dst[pass].push_back(std::move(ev));
+                }
+            }
+        } else {
+            outJson["pass_events"] = std::move(passEvents);
+        }
     }
     return true;
 }

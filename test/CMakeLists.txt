@@ -75,6 +75,7 @@ if(TOPO_CORE_WITH_LANG)
         unit/CompletenessCheckTest.cpp
         unit/ContainmentCheckTest.cpp
         unit/TopoProfTest.cpp
+        unit/JfrNdjsonMergeTest.cpp
         unit/TransformTest.cpp
         unit/TranspileTest.cpp
         unit/TypeRegistryTest.cpp
@@ -105,6 +106,7 @@ if(TOPO_CORE_WITH_LANG)
         topo::lang-python::TopoPythonTranspile
         TopoBuildLib TopoDistribution
         TopoLSPBridge
+        TopoProfile
         nlohmann_json::nlohmann_json
         GTest::gtest_main
     )
