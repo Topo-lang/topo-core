@@ -94,12 +94,25 @@ TEST(LSPBridgeUriTest, UriToPathToleratesBadHexEscape) {
 // uriToPath then had to defend against). pathToUri must now encode so the
 // pair round-trips.
 TEST(LSPBridgeUriTest, PathToUriPercentEncodesAndRoundTrips) {
+    // Inputs must be absolute *per platform*: on Windows pathToUri absolutizes a
+    // path without a drive (prepending the current drive), which would break the
+    // round-trip. Feed genuinely-absolute paths so the test exercises percent
+    // encoding + round-trip, not absolutization.
+#ifdef _WIN32
+    const char* absPaths[] = {
+        "C:/tmp/has space/App.java",
+        "C:/tmp/has%percent/x.cpp",
+        "C:/tmp/weird#?&=name.rs",
+        "C:/tmp/plain/file.py",
+    };
+#else
     const char* absPaths[] = {
         "/tmp/has space/App.java",
         "/tmp/has%percent/x.cpp",
         "/tmp/weird#?&=name.rs",
         "/tmp/plain/file.py",
     };
+#endif
     for (const char* p : absPaths) {
         std::string uri;
         ASSERT_NO_THROW(uri = TestBridge::callPathToUri(p)) << "path=" << p;
@@ -115,8 +128,14 @@ TEST(LSPBridgeUriTest, PathToUriPercentEncodesAndRoundTrips) {
 // '/' and ':' (Windows drive colon) stay literal so the URI keeps its path
 // structure; only out-of-set bytes get encoded.
 TEST(LSPBridgeUriTest, PathToUriKeepsSeparatorsLiteral) {
+#ifdef _WIN32
+    // Drive-absolute on Windows so pathToUri does not re-absolutize.
+    std::string uri = TestBridge::callPathToUri("C:/a/b/c.txt");
+    EXPECT_EQ(uri, "file:///C:/a/b/c.txt");
+#else
     std::string uri = TestBridge::callPathToUri("/a/b/c.txt");
     EXPECT_EQ(uri, "file:///a/b/c.txt");
+#endif
 }
 
 // Regression: parseSemanticTokenLegend called get<std::vector<std::string>>()
