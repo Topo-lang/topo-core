@@ -35,4 +35,4 @@ target_compile_definitions(topo-check-tests PRIVATE
 )
 topo_set_compiler_flags(topo-check-tests)
 topo_apply_std_pch(topo-check-tests)
-gtest_discover_tests(topo-check-tests DISCOVERY_TIMEOUT 30 PROPERTIES LABELS "toolchain;checker" TIMEOUT 60)
+gtest_discover_tests(topo-check-tests DISCOVERY_TIMEOUT 30 PROPERTIES LABELS "toolchain\;checker" TIMEOUT 60)

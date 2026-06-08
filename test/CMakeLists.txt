@@ -122,7 +122,7 @@ if(TOPO_CORE_WITH_LANG)
     # gtest-discovery timeouts at test-registration time.
     gtest_discover_tests(topo-core-tests
         DISCOVERY_TIMEOUT 30
-        PROPERTIES LABELS "toolchain;core" TIMEOUT 120)
+        PROPERTIES LABELS "toolchain\;core" TIMEOUT 120)
 
     # Smoke tests: fast subset for sanity checking (<30s total)
     # These cover parser, sema, and check fundamentals — if these fail, nothing works.

@@ -85,6 +85,6 @@ endif()
 
 gtest_discover_tests(topo-transpile-equivalence-tests DISCOVERY_TIMEOUT 30
     PROPERTIES
-        LABELS "toolchain;transpile_equivalence"
+        LABELS "toolchain\;transpile_equivalence"
         TIMEOUT 300
 )

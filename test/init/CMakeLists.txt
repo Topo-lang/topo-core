@@ -48,4 +48,4 @@ target_sources(topo-init-tests PRIVATE
 topo_set_compiler_flags(topo-init-tests)
 
 topo_apply_std_pch(topo-init-tests)
-gtest_discover_tests(topo-init-tests DISCOVERY_TIMEOUT 30 PROPERTIES LABELS "toolchain;init")
+gtest_discover_tests(topo-init-tests DISCOVERY_TIMEOUT 30 PROPERTIES LABELS "toolchain\;init")
