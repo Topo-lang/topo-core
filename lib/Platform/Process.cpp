@@ -1,4 +1,5 @@
 #include "topo/Platform/Process.h"
+#include "topo/Platform/TempFile.h"
 
 #include <reproc++/reproc.hpp>
 
@@ -83,9 +84,12 @@ int capturePid() {
 std::string makeCaptureTempPath(const char* tag) {
     static std::atomic<unsigned long long> counter{0};
     const unsigned long long n = counter.fetch_add(1, std::memory_order_relaxed);
-    std::error_code ec;
-    std::filesystem::path dir = std::filesystem::temp_directory_path(ec);
-    if (ec) dir = std::filesystem::path("."); // fall back to cwd
+    // topo::platform::tempDirectory() honours TMPDIR / XDG_RUNTIME_DIR / TEMP /
+    // TMP, then the std temp dir, then cwd — the portable route the
+    // no-hardcoded-tmpdir audit gate requires (the raw standard-library temp
+    // lookup ignores TMPDIR on some libstdc++/MSVC configs). TempFile.cpp is
+    // the one sanctioned wrapper around that raw call.
+    std::filesystem::path dir = topo::platform::tempDirectory();
     std::filesystem::path p =
         dir / ("topo-capture-" + std::to_string(capturePid()) + "-" +
                std::to_string(n) + "-" + tag);
