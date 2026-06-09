@@ -531,7 +531,7 @@ TEST(BuiltinAdapterSourceM5, BuiltinZeroResolvesAnUnresolvedLeaf) {
     m.functions.push_back(std::move(fn));
 
     std::vector<std::string> warnings;
-    AdapterRegistry registry = assembleAdapterRegistry("", warnings);
+    AdapterRegistry registry = assembleAdapterRegistry("", {}, warnings);
     EXPECT_TRUE(warnings.empty());
 
     AdapterResolver resolver(registry);
@@ -566,7 +566,7 @@ TEST(AssembleAdapterRegistryM5, LoadsTopoAppManifestAndOverridesBuiltin) {
 
     std::vector<std::string> warnings;
     AdapterRegistry registry =
-        assembleAdapterRegistry(tmp.string(), warnings);
+        assembleAdapterRegistry(tmp.string(), {}, warnings);
     EXPECT_TRUE(warnings.empty());
 
     auto candidates = registry.lookup("topo::zero", HostLanguage::Cpp);
@@ -595,8 +595,293 @@ TEST(AssembleAdapterRegistryM5, LoadsTopoAppManifestAndOverridesBuiltin) {
 TEST(AssembleAdapterRegistryM5, BadManifestPathWarnsButKeepsBuiltin) {
     std::vector<std::string> warnings;
     AdapterRegistry registry =
-        assembleAdapterRegistry("/no/such/adapter/manifest.json", warnings);
+        assembleAdapterRegistry("/no/such/adapter/manifest.json", {}, warnings);
     // Non-fatal: a warning is recorded and the builtin source still stands.
     ASSERT_FALSE(warnings.empty());
     EXPECT_NE(registry.lookup("topo::zero", HostLanguage::Cpp).size(), 0u);
+}
+
+// =====================================================================
+// M6 — tpm adapter source (the previously-deferred third source)
+//
+// A tpm package supplies leaf adapters via a JSON manifest (same schema as
+// the topo-app source) under its `adapters/` directory. topo-core never
+// discovers tpm packages itself; the caller hands assembleAdapterRegistry
+// a (package, manifest-path) list. tpm outranks topo-app and builtin, and
+// every diagnostic naming a tpm entry reads `tpm:<package>`.
+// =====================================================================
+
+namespace {
+
+// The integer literal returned by a single-statement `return <int>;` leaf
+// body, or a sentinel when the body is not that shape. Lets a test prove
+// *which* source's body was installed (each source returns a distinct int).
+std::string returnedIntLiteral(const TranspileFunction& fn) {
+    // Qualify ReturnStmt / LiteralExpr: both names also exist as AST nodes in
+    // `topo::` (ASTNode.h), so the unqualified forms are ambiguous here.
+    if (fn.body.size() != 1) return "<not-single-stmt>";
+    if (fn.body[0]->kind() != Stmt::Kind::Return) return "<not-return>";
+    const auto* ret =
+        static_cast<const topo::transpile::ReturnStmt*>(fn.body[0].get());
+    if (!ret->value || ret->value->kind() != Expr::Kind::Literal)
+        return "<not-literal>";
+    return static_cast<const topo::transpile::LiteralExpr*>(ret->value.get())
+        ->value;
+}
+
+// A one-entry adapter manifest for a leaf returning the integer `val`, with
+// declared return type `retType` (use a non-matching type to force a
+// signature mismatch). Same JSON schema the builtin/topo-app sources use.
+std::string leafManifest(const std::string& qn, const std::string& lang,
+                         const std::string& retType, const std::string& val) {
+    return std::string("[{")
+        + "\"topoFunction\":\"" + qn + "\","
+        + "\"targetLanguage\":\"" + lang + "\","
+        + "\"signature\":{\"returnType\":{\"nameParts\":[\"" + retType +
+          "\"]},\"params\":[]},"
+        + "\"bodyModel\":[{\"kind\":\"return\",\"fidelity\":\"source\","
+        +   "\"value\":{\"kind\":\"literal\",\"fidelity\":\"source\","
+        +   "\"litKind\":\"integer\",\"value\":\"" + val + "\"}}]"
+        + "}]";
+}
+
+std::filesystem::path writeTempManifest(const std::string& name,
+                                        const std::string& json) {
+    auto p = std::filesystem::temp_directory_path() / name;
+    { std::ofstream(p) << json; }
+    return p;
+}
+
+bool anyWarningContains(const std::vector<std::string>& ws,
+                        const std::string& needle) {
+    for (const auto& w : ws)
+        if (w.find(needle) != std::string::npos) return true;
+    return false;
+}
+
+} // namespace
+
+TEST(TpmAdapterSourceM6, ProvenanceLabelReadsTpmColonPackage) {
+    AdapterEntry tpmPkg;
+    tpmPkg.provenance = AdapterProvenance::Tpm;
+    tpmPkg.provenancePackage = "my-org/asio-bridge";
+    EXPECT_EQ(adapterProvenanceLabel(tpmPkg), "tpm:my-org/asio-bridge");
+
+    AdapterEntry builtin; // default provenance, no package
+    EXPECT_EQ(adapterProvenanceLabel(builtin), "builtin");
+
+    AdapterEntry tpmNoPkg; // tpm but unlabeled → bare source-kind name
+    tpmNoPkg.provenance = AdapterProvenance::Tpm;
+    EXPECT_EQ(adapterProvenanceLabel(tpmNoPkg), "tpm");
+}
+
+TEST(TpmAdapterSourceM6, ResolvesLeafAndStampsPackageLabel) {
+    auto path = writeTempManifest("topo-m6-tpm-basic.json",
+                                  leafManifest("data::loadData", "cpp", "i64", "7"));
+    std::vector<std::string> warnings;
+    AdapterRegistry registry = assembleAdapterRegistry(
+        "", {{"my-org/asio-bridge", path.string()}}, warnings);
+    EXPECT_TRUE(warnings.empty())
+        << (warnings.empty() ? std::string() : warnings.front());
+
+    // data::loadData is not a builtin leaf → only the tpm candidate exists,
+    // stamped with provenance Tpm and the package name.
+    auto cands = registry.lookup("data::loadData", HostLanguage::Cpp);
+    ASSERT_EQ(cands.size(), 1u);
+    EXPECT_EQ(cands[0]->provenance, AdapterProvenance::Tpm);
+    EXPECT_EQ(cands[0]->provenancePackage, "my-org/asio-bridge");
+
+    TranspileModule m = oneLeafModule(); // data::loadData, i64
+    AdapterResolver resolver(registry);
+    ResolveStats stats = resolver.resolve(m, HostLanguage::Cpp);
+    EXPECT_EQ(stats.resolved, 1);
+    EXPECT_EQ(stats.degraded, 0);
+    const TranspileFunction* fn = findFn(m, "data::loadData");
+    ASSERT_NE(fn, nullptr);
+    EXPECT_FALSE(isUnresolvedLeaf(*fn));
+    EXPECT_EQ(returnedIntLiteral(*fn), "7");
+
+    std::filesystem::remove(path);
+}
+
+TEST(TpmAdapterSourceM6, OverridesBuiltin) {
+    // tpm re-supplies the builtin leaf `topo::zero` with a distinct body (7).
+    auto path = writeTempManifest("topo-m6-tpm-over-builtin.json",
+                                  leafManifest("topo::zero", "cpp", "i64", "7"));
+    std::vector<std::string> warnings;
+    AdapterRegistry registry = assembleAdapterRegistry(
+        "", {{"my-org/asio-bridge", path.string()}}, warnings);
+    EXPECT_TRUE(warnings.empty());
+
+    auto cands = registry.lookup("topo::zero", HostLanguage::Cpp);
+    EXPECT_EQ(cands.size(), 2u); // builtin + tpm
+
+    TranspileModule m = oneLeafModule("topo::zero");
+    AdapterResolver resolver(registry);
+    ResolveStats stats = resolver.resolve(m, HostLanguage::Cpp);
+    EXPECT_EQ(stats.resolved, 1);
+    const TranspileFunction* fn = findFn(m, "topo::zero");
+    ASSERT_NE(fn, nullptr);
+    EXPECT_EQ(returnedIntLiteral(*fn), "7"); // tpm body, not builtin's 0
+    EXPECT_TRUE(anyWarningContains(
+        stats.warnings, "overridden by 'tpm:my-org/asio-bridge'"))
+        << "tpm overriding builtin must be diagnosed by package name";
+
+    std::filesystem::remove(path);
+}
+
+TEST(TpmAdapterSourceM6, OverridesTopoAppAndBuiltin) {
+    // All three sources supply topo::zero with distinct bodies; tpm wins.
+    auto topoApp = writeTempManifest("topo-m6-topoapp.json",
+                                     leafManifest("topo::zero", "cpp", "i64", "99"));
+    auto tpm = writeTempManifest("topo-m6-tpm-top.json",
+                                 leafManifest("topo::zero", "cpp", "i64", "7"));
+    std::vector<std::string> warnings;
+    AdapterRegistry registry = assembleAdapterRegistry(
+        topoApp.string(), {{"my-org/asio-bridge", tpm.string()}}, warnings);
+    EXPECT_TRUE(warnings.empty());
+
+    auto cands = registry.lookup("topo::zero", HostLanguage::Cpp);
+    EXPECT_EQ(cands.size(), 3u); // builtin + topo-app + tpm
+
+    TranspileModule m = oneLeafModule("topo::zero");
+    AdapterResolver resolver(registry);
+    ResolveStats stats = resolver.resolve(m, HostLanguage::Cpp);
+    EXPECT_EQ(stats.resolved, 1);
+    const TranspileFunction* fn = findFn(m, "topo::zero");
+    ASSERT_NE(fn, nullptr);
+    EXPECT_EQ(returnedIntLiteral(*fn), "7"); // tpm over topo-app(99) and builtin(0)
+
+    int overridesByTpm = 0;
+    for (const auto& w : stats.warnings)
+        if (w.find("overridden by 'tpm:my-org/asio-bridge'") != std::string::npos)
+            ++overridesByTpm;
+    EXPECT_EQ(overridesByTpm, 2) << "tpm overrides both topo-app and builtin";
+
+    std::filesystem::remove(topoApp);
+    std::filesystem::remove(tpm);
+}
+
+TEST(TpmAdapterSourceM6, SignatureMismatchSkippedAndDiagnosed) {
+    // tpm supplies topo::zero with a mismatched signature (f64 return);
+    // topo-app supplies a matching one. tpm must be skipped (and diagnosed
+    // by name), the matching topo-app candidate used — never silently.
+    auto topoApp = writeTempManifest("topo-m6-mismatch-topoapp.json",
+                                     leafManifest("topo::zero", "cpp", "i64", "99"));
+    auto tpm = writeTempManifest("topo-m6-mismatch-tpm.json",
+                                 leafManifest("topo::zero", "cpp", "f64", "7"));
+    std::vector<std::string> warnings;
+    AdapterRegistry registry = assembleAdapterRegistry(
+        topoApp.string(), {{"my-org/asio-bridge", tpm.string()}}, warnings);
+    EXPECT_TRUE(warnings.empty());
+
+    TranspileModule m = oneLeafModule("topo::zero"); // i64 return
+    AdapterResolver resolver(registry);
+    ResolveStats stats = resolver.resolve(m, HostLanguage::Cpp);
+    EXPECT_EQ(stats.resolved, 1);
+    EXPECT_EQ(stats.degraded, 0);
+    const TranspileFunction* fn = findFn(m, "topo::zero");
+    ASSERT_NE(fn, nullptr);
+    EXPECT_EQ(returnedIntLiteral(*fn), "99"); // topo-app, since tpm mismatched
+    EXPECT_TRUE(anyWarningContains(
+        stats.warnings,
+        "from 'tpm:my-org/asio-bridge' skipped: signature mismatch"))
+        << "a signature-drifted tpm adapter must be diagnosed, never silent";
+
+    std::filesystem::remove(topoApp);
+    std::filesystem::remove(tpm);
+}
+
+TEST(TpmAdapterSourceM6, TwoTpmPackagesAreTrueAmbiguityNeverSilent) {
+    // Two equal-priority tpm packages supply the same leaf → true ambiguity:
+    // degrade (never silently pick one, never fall through to builtin), and
+    // name both colliding packages.
+    auto a = writeTempManifest("topo-m6-amb-a.json",
+                               leafManifest("topo::zero", "cpp", "i64", "7"));
+    auto b = writeTempManifest("topo-m6-amb-b.json",
+                               leafManifest("topo::zero", "cpp", "i64", "8"));
+    std::vector<std::string> warnings;
+    AdapterRegistry registry = assembleAdapterRegistry(
+        "", {{"org/a", a.string()}, {"org/b", b.string()}}, warnings);
+    EXPECT_TRUE(warnings.empty());
+
+    TranspileModule m = oneLeafModule("topo::zero");
+    AdapterResolver resolver(registry);
+    ResolveStats stats = resolver.resolve(m, HostLanguage::Cpp);
+    EXPECT_EQ(stats.resolved, 0);
+    EXPECT_EQ(stats.degraded, 1);
+    const TranspileFunction* fn = findFn(m, "topo::zero");
+    ASSERT_NE(fn, nullptr);
+    EXPECT_EQ(fn->fidelity, Fidelity::Inferred);
+
+    bool ambiguous = false, namesA = false, namesB = false;
+    for (const auto& w : stats.warnings) {
+        if (w.find("ambiguous adapter for leaf 'topo::zero'") != std::string::npos) {
+            ambiguous = true;
+            if (w.find("tpm:org/a") != std::string::npos) namesA = true;
+            if (w.find("tpm:org/b") != std::string::npos) namesB = true;
+        }
+    }
+    EXPECT_TRUE(ambiguous);
+    EXPECT_TRUE(namesA && namesB)
+        << "ambiguity diagnostic must name both colliding tpm packages";
+
+    std::filesystem::remove(a);
+    std::filesystem::remove(b);
+}
+
+TEST(TpmAdapterSourceM6, ParseErrorIsNonFatalAndKeepsOtherSources) {
+    auto bad = writeTempManifest("topo-m6-badjson.json", "{ not valid json ]");
+    std::vector<std::string> warnings;
+    AdapterRegistry registry = assembleAdapterRegistry(
+        "", {{"org/broken", bad.string()}}, warnings);
+    ASSERT_FALSE(warnings.empty());
+    EXPECT_TRUE(anyWarningContains(warnings, "org/broken"))
+        << "the warning must name the offending package";
+
+    // builtin still resolves topo::zero — a broken tpm manifest is non-fatal.
+    TranspileModule m = oneLeafModule("topo::zero");
+    AdapterResolver resolver(registry);
+    ResolveStats stats = resolver.resolve(m, HostLanguage::Cpp);
+    EXPECT_EQ(stats.resolved, 1);
+    const TranspileFunction* fn = findFn(m, "topo::zero");
+    ASSERT_NE(fn, nullptr);
+    EXPECT_EQ(returnedIntLiteral(*fn), "0"); // builtin
+
+    std::filesystem::remove(bad);
+}
+
+TEST(TpmAdapterSourceM6, UnreadablePathIsNonFatalAndKeepsOtherSources) {
+    std::vector<std::string> warnings;
+    AdapterRegistry registry = assembleAdapterRegistry(
+        "", {{"org/missing", "/no/such/tpm/adapter/manifest.json"}}, warnings);
+    ASSERT_FALSE(warnings.empty());
+    EXPECT_TRUE(anyWarningContains(warnings, "org/missing"));
+    EXPECT_NE(registry.lookup("topo::zero", HostLanguage::Cpp).size(), 0u);
+}
+
+TEST(TpmAdapterSourceM6, EmptyTpmListLeavesBuiltinAndTopoAppUnchanged) {
+    // Regression: with no tpm manifests, behaviour is byte-for-byte the
+    // legacy builtin + topo-app path (topo-app over builtin, no tpm entries).
+    auto topoApp = writeTempManifest("topo-m6-regress-topoapp.json",
+                                     leafManifest("topo::zero", "cpp", "i64", "99"));
+    std::vector<std::string> warnings;
+    AdapterRegistry registry =
+        assembleAdapterRegistry(topoApp.string(), {}, warnings);
+    EXPECT_TRUE(warnings.empty());
+
+    auto cands = registry.lookup("topo::zero", HostLanguage::Cpp);
+    EXPECT_EQ(cands.size(), 2u); // builtin + topo-app, no tpm
+    for (const auto* c : cands)
+        EXPECT_NE(c->provenance, AdapterProvenance::Tpm);
+
+    TranspileModule m = oneLeafModule("topo::zero");
+    AdapterResolver resolver(registry);
+    ResolveStats stats = resolver.resolve(m, HostLanguage::Cpp);
+    EXPECT_EQ(stats.resolved, 1);
+    const TranspileFunction* fn = findFn(m, "topo::zero");
+    ASSERT_NE(fn, nullptr);
+    EXPECT_EQ(returnedIntLiteral(*fn), "99"); // topo-app over builtin, as before
+
+    std::filesystem::remove(topoApp);
 }

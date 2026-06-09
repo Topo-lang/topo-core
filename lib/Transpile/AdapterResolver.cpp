@@ -20,6 +20,14 @@ const char* adapterProvenanceName(AdapterProvenance p) {
     return "unknown";
 }
 
+std::string adapterProvenanceLabel(const AdapterEntry& entry) {
+    if (entry.provenance == AdapterProvenance::Tpm &&
+        !entry.provenancePackage.empty()) {
+        return std::string("tpm:") + entry.provenancePackage;
+    }
+    return adapterProvenanceName(entry.provenance);
+}
+
 namespace {
 
 // Lower-case host-language name for diagnostics, matching the CLI `--to`
@@ -177,6 +185,7 @@ AdapterEntry AdapterEntry::clone() const {
     c.bodyOpaque = bodyOpaque;
     c.hasOpaque = hasOpaque;
     c.provenance = provenance;
+    c.provenancePackage = provenancePackage;
     for (const auto& s : bodyModel) {
         c.bodyModel.push_back(cloneStmt(*s));
     }
@@ -201,7 +210,8 @@ void AdapterRegistry::addSource(AdapterSource& source) {
 
 ManifestAdapterSource ManifestAdapterSource::fromJson(AdapterProvenance prov,
                                                       const std::string& json,
-                                                      std::string& outError) {
+                                                      std::string& outError,
+                                                      const std::string& packageName) {
     std::vector<AdapterEntry> entries;
     try {
         nlohmann::json root = nlohmann::json::parse(json);
@@ -252,6 +262,7 @@ ManifestAdapterSource ManifestAdapterSource::fromJson(AdapterProvenance prov,
                 }
             }
             e.provenance = prov;
+            e.provenancePackage = packageName;
             entries.push_back(std::move(e));
         }
     } catch (const nlohmann::json::exception& ex) {
@@ -333,8 +344,10 @@ std::vector<AdapterEntry> BuiltinAdapterSource::enumerate() {
 
 // --- Registry assembly (resolution behavior, step 2) ------------------------
 
-AdapterRegistry assembleAdapterRegistry(const std::string& topoAppManifestPath,
-                                        std::vector<std::string>& outWarnings) {
+AdapterRegistry assembleAdapterRegistry(
+    const std::string& topoAppManifestPath,
+    const std::vector<TpmAdapterManifestRef>& tpmManifests,
+    std::vector<std::string>& outWarnings) {
     AdapterRegistry registry;
 
     // Builtin source — always assembled.
@@ -363,7 +376,31 @@ AdapterRegistry assembleAdapterRegistry(const std::string& topoAppManifestPath,
         }
     }
 
-    // tpm package source — deliberately not assembled (deferred).
+    // tpm package sources — one per installed package whose adapter manifest
+    // the caller resolved (topo-core never discovers tpm packages itself; it
+    // never depends on topo-tpm). tpm outranks topo-app and builtin
+    // (provenanceRank). An unreadable path or a parse error is non-fatal: it
+    // is reported through outWarnings and skipped, the other sources stand.
+    for (const auto& ref : tpmManifests) {
+        std::ifstream file(ref.path);
+        if (!file) {
+            outWarnings.push_back("tpm adapter manifest not readable for '" +
+                                  ref.package + "': " + ref.path);
+            continue;
+        }
+        std::ostringstream ss;
+        ss << file.rdbuf();
+        std::string err;
+        ManifestAdapterSource source = ManifestAdapterSource::fromJson(
+            AdapterProvenance::Tpm, ss.str(), err, ref.package);
+        if (!err.empty()) {
+            outWarnings.push_back("tpm adapter manifest '" + ref.path +
+                                  "' (package '" + ref.package + "'): " + err);
+            continue;
+        }
+        registry.addSource(source);
+    }
+
     return registry;
 }
 
@@ -440,7 +477,7 @@ ResolveStats AdapterResolver::resolve(TranspileModule& module,
                     // mismatch — diagnose so the adapter author sees it.
                     stats.warnings.push_back(
                         "adapter for leaf '" + fn.qualifiedName +
-                        "' from '" + adapterProvenanceName(c->provenance) +
+                        "' from '" + adapterProvenanceLabel(*c) +
                         "' skipped: signature mismatch");
                 }
             }
@@ -452,13 +489,18 @@ ResolveStats AdapterResolver::resolve(TranspileModule& module,
                 // True ambiguity — multiple signature-matching candidates at
                 // the same priority. No objective tie-break.
                 ambiguous = true;
+                // Name every colliding source so a two-tpm-package clash
+                // reads, e.g., "candidates: tpm:org/a, tpm:org/b".
+                std::string labels;
+                for (size_t i = 0; i < compatible.size(); ++i) {
+                    if (i) labels += ", ";
+                    labels += adapterProvenanceLabel(*compatible[i]);
+                }
                 ambiguityReason =
                     "ambiguous adapter for leaf '" + fn.qualifiedName +
                     "' targeting " + langName(targetLanguage) + " (" +
                     std::to_string(compatible.size()) +
-                    " candidates at provenance '" +
-                    adapterProvenanceName(compatible.front()->provenance) +
-                    "')";
+                    " candidates: " + labels + ")";
                 break;
             }
             // compatible.empty() → fall through to the next-lower rank.
@@ -493,9 +535,9 @@ ResolveStats AdapterResolver::resolve(TranspileModule& module,
                 signatureMatches(*c, fn)) {
                 stats.warnings.push_back(
                     "adapter for leaf '" + fn.qualifiedName +
-                    "' from '" + adapterProvenanceName(c->provenance) +
+                    "' from '" + adapterProvenanceLabel(*c) +
                     "' overridden by '" +
-                    adapterProvenanceName(chosen->provenance) + "'");
+                    adapterProvenanceLabel(*chosen) + "'");
             }
         }
 

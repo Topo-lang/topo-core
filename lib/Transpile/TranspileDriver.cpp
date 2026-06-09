@@ -277,9 +277,11 @@ TranspileResult TranspileDriver::runFromTopoSource(const TranspileRequest& reque
 
     // 3. Fill leaf functions from the adapter registry (M3/M5). The builtin
     // adapter source is always assembled; the topo-app source is loaded from
-    // `adapterManifestPath` when supplied.
-    AdapterRegistry registry =
-        assembleAdapterRegistry(request.adapterManifestPath, result.warnings);
+    // `adapterManifestPath` when supplied; tpm sources from
+    // `tpmAdapterManifests` (priority tpm > topo-app > builtin).
+    AdapterRegistry registry = assembleAdapterRegistry(
+        request.adapterManifestPath, request.tpmAdapterManifests,
+        result.warnings);
     AdapterResolver resolver(registry);
     ResolveStats stats = resolver.resolve(module, request.targetLanguage);
     for (auto& w : stats.warnings) result.warnings.push_back(std::move(w));

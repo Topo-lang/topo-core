@@ -32,7 +32,8 @@ namespace topo::transpile {
 enum class AdapterProvenance {
     Builtin,  // toolchain-bundled standard leaf implementations
     TopoApp,  // topo-app product-layer leaf implementations
-    Tpm       // tpm `declaration` package (deferred — no source delivered yet)
+    Tpm       // tpm package source (assembled from --tpm-adapters manifests;
+              // carries provenancePackage for the `tpm:<pkg>` diagnostic label)
 };
 
 const char* adapterProvenanceName(AdapterProvenance p);
@@ -63,6 +64,10 @@ struct AdapterEntry {
     OpaqueBody bodyOpaque;            // escape-hatch body (single target language)
     bool hasOpaque = false;           // true ⇒ use bodyOpaque, false ⇒ use bodyModel
     AdapterProvenance provenance = AdapterProvenance::Builtin;
+    // For a tpm-sourced entry: the package name, so diagnostics read
+    // `tpm:<pkg>` (the `provenance` enum alone only distinguishes the three
+    // source kinds). Empty for builtin / topo-app entries.
+    std::string provenancePackage;
 
     AdapterEntry() = default;
     AdapterEntry(AdapterEntry&&) = default;
@@ -72,6 +77,11 @@ struct AdapterEntry {
 
     AdapterEntry clone() const;
 };
+
+// Human-readable provenance label for diagnostics. For a tpm entry that
+// carries a package name this is `tpm:<pkg>`; otherwise the bare
+// source-kind name (`builtin` / `topo-app` / `tpm`).
+std::string adapterProvenanceLabel(const AdapterEntry& entry);
 
 // --- Adapter source ---------------------------------------------------------
 
@@ -108,9 +118,13 @@ public:
 
     // Parse a manifest JSON string. On a parse error `outError` is set and
     // an empty source is returned (the caller decides whether that is fatal).
+    // `packageName`, when non-empty, is stamped onto every entry's
+    // `provenancePackage` (used by tpm sources so diagnostics read
+    // `tpm:<pkg>`); builtin / topo-app sources leave it empty.
     static ManifestAdapterSource fromJson(AdapterProvenance prov,
                                           const std::string& json,
-                                          std::string& outError);
+                                          std::string& outError,
+                                          const std::string& packageName = "");
 
     std::vector<AdapterEntry> enumerate() override;
     AdapterProvenance provenance() const override { return provenance_; }
@@ -164,6 +178,17 @@ public:
     AdapterProvenance provenance() const override { return AdapterProvenance::Builtin; }
 };
 
+// One tpm adapter manifest to assemble: the package it came from (for the
+// `tpm:<pkg>` provenance label) plus the path to its JSON adapter manifest
+// (typically a file under the package's `adapters/` directory). topo-core
+// does NOT discover tpm packages itself — it never depends on topo-tpm; the
+// caller (the CLI, or a future `topo-build` integration) resolves installed
+// packages and hands their adapter-manifest paths in here.
+struct TpmAdapterManifestRef {
+    std::string package;  // package name, e.g. "my-org/asio-bridge"
+    std::string path;     // path to a JSON adapter manifest
+};
+
 // Assemble the standard adapter registry for a `.topo`-source transpile run.
 // This is the second step of the adapter lifecycle within a transpile run
 // (registry assembly between the source pass and the resolver walk).
@@ -174,12 +199,17 @@ public:
 //     project emits this manifest; `topo-transpile` receives the path via the
 //     `--adapters` CLI flag. A parse error is reported through `outWarnings`
 //     (non-fatal — the builtin source still stands).
-//   - The tpm package source is deliberately NOT assembled here — tpm
-//     declaration packages are deferred.
+//   - Each entry in `tpmManifests` is loaded as a tpm adapter source
+//     (provenance `Tpm`, stamped with the package name so diagnostics read
+//     `tpm:<pkg>`). tpm outranks topo-app and builtin (§3.4). An unreadable
+//     path or a parse error is reported through `outWarnings` and skipped
+//     (non-fatal — the other sources still stand).
 //
 // Returns the assembled registry by value.
-AdapterRegistry assembleAdapterRegistry(const std::string& topoAppManifestPath,
-                                        std::vector<std::string>& outWarnings);
+AdapterRegistry assembleAdapterRegistry(
+    const std::string& topoAppManifestPath,
+    const std::vector<TpmAdapterManifestRef>& tpmManifests,
+    std::vector<std::string>& outWarnings);
 
 // --- Resolver ---------------------------------------------------------------
 

@@ -3,6 +3,7 @@
 
 #include "topo/Basic/HostLanguage.h"
 #include "topo/Sema/SymbolTable.h"
+#include "topo/Transpile/AdapterResolver.h"
 #include "topo/Transpile/Emitter.h"
 #include "topo/Transpile/TranspileModel.h"
 #include <filesystem>
@@ -33,6 +34,13 @@ struct TranspileRequest {
     // source in `.topo`-source mode (the CLI `--adapters` flag). Empty = only
     // the always-on builtin adapter source is used.
     std::string adapterManifestPath;
+    // tpm adapter sources: one per installed tpm package whose adapter
+    // manifest the caller resolved. Assembled at priority tpm > topo-app >
+    // builtin in `.topo`-source mode. The CLI populates this from
+    // `--tpm-adapters <pkg>=<path>`. Empty = no tpm sources. topo-core does
+    // NOT discover tpm packages itself (it never depends on topo-tpm); the
+    // package→manifest mapping is supplied from outside.
+    std::vector<TpmAdapterManifestRef> tpmAdapterManifests;
 
     // Post-transpile verification gate. nullopt = no gate (driver does not
     // fail on unsupported constructs; the CLI may still apply its own legacy
