@@ -87,6 +87,7 @@ if(TOPO_CORE_WITH_LANG)
         unit/SpecSemanticStructureTest.cpp
         unit/DebugEmitterTest.cpp
         unit/DebugIpcTest.cpp
+        unit/WebSocketOriginTest.cpp
         unit/TemplateEngineTest.cpp
         unit/PassReportsLoaderTest.cpp
         unit/EvaluatorStructTest.cpp

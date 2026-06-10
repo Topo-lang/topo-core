@@ -21,6 +21,13 @@ namespace topo::debug_server {
 // Compute Sec-WebSocket-Accept = base64(sha1(clientKey + magic_guid)).
 std::string wsAcceptHeader(const std::string& clientKey);
 
+// Returns true if a WebSocket upgrade carrying this `Origin` header value may
+// proceed: an empty value (non-browser client, which sends no Origin) or a
+// loopback origin (127.0.0.1 / localhost / ::1). Any cross-origin browser page
+// — and the opaque "null" origin — is rejected. This is the Cross-Site
+// WebSocket Hijacking defense for the loopback debug server.
+bool wsOriginAllowed(const std::string& originHeaderValue);
+
 // Write the RFC 6455 server handshake reply to `connFd`. Returns false when
 // the request is missing Sec-WebSocket-Key or any write fails. The caller
 // has already received the HTTP headers; we only inspect them.
