@@ -1,0 +1,17 @@
+# check-on-by-default e2e fixture (violating): the host code declares a
+# public method (`Calculator.subtract`) that main.topo does not declare, so
+# topo-check reports a completeness error. There is deliberately NO
+# optimization section — a PLAIN `topo-build` must still run topo-check and
+# exit non-zero, while `topo-build --no-check` must skip the check and
+# complete (the explicit escape hatch stays quiet on a plain build).
+[project]
+name = "check_default_violating"
+
+[topo]
+root = "main.topo"
+
+[build]
+language = "java"
+sources = ["src/main/java"]
+output = "main.jar"
+output_type = "exe"

@@ -14,10 +14,14 @@
 namespace topo::build {
 
 /// Three-state setting for [build].check.
-/// Auto: no explicit preference — run topo-check when the build enables an
-///       optimization that consumes .topo declarations (the optimization
-///       license rests on *checked* declarations); otherwise skip it.
-/// On:   always run topo-check as part of the build.
+/// Auto: no explicit preference — run topo-check on every build (the
+///       default). Check is the universal half of the toolchain promise:
+///       declarations participate in transpile / debug views / optimization
+///       regardless of build flavor, so they are validated on every build,
+///       not only when an optimization consumes them.
+/// On:   always run topo-check as part of the build. Behaves like Auto
+///       today, but pins the choice explicitly so a future change to the
+///       Auto default can never silently turn this project's check off.
 /// Off:  skip topo-check even if it would otherwise run.
 enum class CheckMode { Auto, On, Off };
 
@@ -124,13 +128,18 @@ struct BuildConfig {
     /// True when an enabled optimization consumes .topo declarations whose
     /// incorrectness would make the optimization unsafe (parallelism →
     /// concurrency, loop-parallelism, lifetime → memory). Optimizing on such
-    /// declarations is only licensed once they are checked, so CheckMode::Auto
-    /// turns checking ON in this case.
+    /// declarations is only licensed once they are checked. Checking is on by
+    /// default for every build, so this predicate no longer gates whether
+    /// check runs; it grades the *opt-out*: a build driver that sees
+    /// shouldRunCheck() == false while this returns true is skipping
+    /// validation the enabled optimizations rely on, and warns loudly
+    /// (declarations enter the build UNVERIFIED).
     ///
     /// parallel / loopParallel / lifetime default to Off, so any non-Off value
     /// is a deliberate opt-in. pipeline defaults to Auto, so only an explicit
-    /// Force counts as the user enabling it (Auto pipeline is the no-op default
-    /// and must not, on its own, flip every build into checked mode).
+    /// Force counts as the user enabling it (the no-op Auto pipeline default
+    /// must not, on its own, upgrade every unchecked build into the loud
+    /// warning path).
     bool consumesDeclarationsForOptimization() const {
         return parallelCfg.mode != FeatureMode::Off
             || loopParallelCfg.mode != FeatureMode::Off
@@ -139,15 +148,16 @@ struct BuildConfig {
     }
 
     /// Resolve whether topo-check should run. Precedence: CLI (--check /
-    /// --no-check) > [build].check On/Off > Auto. Under Auto, check runs exactly
-    /// when a declaration-consuming optimization is enabled — so plain builds
-    /// stay fast while optimized builds validate the declarations the passes
-    /// rely on.
+    /// --no-check) > [build].check On/Off > Auto. Auto checks every build:
+    /// a violating project fails a plain build the same way it fails an
+    /// optimized one, and the incremental check cache (.topo-check-cache)
+    /// keeps the no-change rebuild overhead near zero. The only unchecked
+    /// builds are explicit opt-outs (--no-check / [build].check = "off").
     bool shouldRunCheck() const {
         if (checkCliOverride.has_value()) return *checkCliOverride;
         if (checkMode == CheckMode::On) return true;
         if (checkMode == CheckMode::Off) return false;
-        return consumesDeclarationsForOptimization();
+        return true; // Auto: every build checks by default
     }
 
     // Mixed C++/Rust project configuration (only used when language == Mixed)

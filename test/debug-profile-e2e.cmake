@@ -247,15 +247,17 @@ if(TOPO_ENABLE_LLVM AND NOT WIN32 AND TARGET topo-debug-cpp AND TARGET tiny_matr
         FIXTURES_SETUP project_simple_built
         LABELS "e2e;topo-debug-cpp;toolchain"
         TIMEOUT 60)
-    # topo-build locates its backend driver in its own exe dir or on PATH;
-    # in the build tree the driver lives in the sibling package's dir, so
-    # prepend it (otherwise the build step can only pass against an
-    # installed toolchain — never in a fresh tree). Guarded: this section's
-    # gate does not imply the driver target exists in every configure.
+    # topo-build locates its backend driver — and, with check-on-by-default,
+    # topo-check — in its own exe dir or on PATH; in the build tree both live
+    # in sibling packages' dirs, so prepend them (otherwise the build step
+    # can only pass against an installed toolchain — never in a fresh tree).
+    # Guarded: this section's gate does not imply the driver target exists
+    # in every configure (topo-check ships beside topo-build, so inside
+    # these topo-build-gated blocks it always resolves).
     if(TARGET topo-build-llvm-cpp)
         set_property(TEST e2e.topo-debug-cpp.project_simple.build APPEND PROPERTY
             ENVIRONMENT_MODIFICATION
-                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-cpp>")
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-cpp>;PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-check>")
     endif()
 
     add_test(NAME e2e.topo-debug-cpp.project_simple.view_first_half_sum
@@ -431,7 +433,7 @@ if(TOPO_ENABLE_LLVM AND NOT WIN32 AND TARGET topo-debug-cpp AND TARGET tiny_matr
     if(TARGET topo-build-llvm-cpp)
         set_property(TEST e2e.topo-debug-cpp.project_multi.build APPEND PROPERTY
             ENVIRONMENT_MODIFICATION
-                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-cpp>")
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-cpp>;PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-check>")
     endif()
 
     add_test(NAME e2e.topo-debug-cpp.project_multi.summary
@@ -465,7 +467,7 @@ if(TOPO_ENABLE_LLVM AND NOT WIN32 AND TARGET topo-debug-cpp AND TARGET tiny_matr
     if(TARGET topo-build-llvm-cpp)
         set_property(TEST e2e.topo-debug-cpp.project_chart.build APPEND PROPERTY
             ENVIRONMENT_MODIFICATION
-                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-cpp>")
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-cpp>;PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-check>")
     endif()
 endif()
 
@@ -522,7 +524,7 @@ if(Python3_FOUND AND NOT WIN32)
         if(TARGET topo-build-llvm-cpp)
             set_property(TEST e2e.topo-debug-cpp.formatter_fixture_build
                 APPEND PROPERTY ENVIRONMENT_MODIFICATION
-                    "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-cpp>")
+                    "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-cpp>;PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-check>")
         endif()
 
         add_test(NAME e2e.topo-debug-cpp.formatter_unit
@@ -628,7 +630,7 @@ if(Python3_FOUND AND NOT WIN32)
         if(TARGET topo-build-llvm-cpp)
             set_property(TEST e2e.topo-debug-cpp.formatter_e2e APPEND PROPERTY
                 ENVIRONMENT_MODIFICATION
-                    "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-cpp>")
+                    "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-cpp>;PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-check>")
         endif()
     endif()
 else()
@@ -740,7 +742,7 @@ if(TARGET topo-debug-java AND TOPO_DEBUG_JAVA_RUNTIME_HOME AND NOT WIN32)
     if(TARGET topo-build-jvm-java)
         set_property(TEST e2e.topo-debug-java.project_simple.build APPEND PROPERTY
             ENVIRONMENT_MODIFICATION
-                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-jvm-java>")
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-jvm-java>;PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-check>")
     endif()
 
     # All query/summary/snapshot tests below pass `--debug-meta` explicitly
@@ -870,7 +872,7 @@ if(TARGET topo-debug-java AND TOPO_DEBUG_JAVA_RUNTIME_HOME AND NOT WIN32)
     if(TARGET topo-build-jvm-java)
         set_property(TEST e2e.topo-debug-java.project_multi.build APPEND PROPERTY
             ENVIRONMENT_MODIFICATION
-                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-jvm-java>")
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-jvm-java>;PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-check>")
     endif()
 
     add_test(NAME e2e.topo-debug-java.project_multi.sum_a
@@ -1081,7 +1083,7 @@ if(TOPO_ENABLE_LLVM AND NOT WIN32 AND TARGET topo-debug-rust
     if(TARGET topo-build-llvm-rust)
         set_property(TEST e2e.topo-debug-rust.project_simple.build APPEND PROPERTY
             ENVIRONMENT_MODIFICATION
-                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-rust>")
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-rust>;PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-check>")
     endif()
 
     add_test(NAME e2e.topo-debug-rust.project_simple.view_first_half_sum
@@ -1200,7 +1202,7 @@ if(TOPO_ENABLE_LLVM AND NOT WIN32 AND TARGET topo-debug-rust
     if(TARGET topo-build-llvm-rust)
         set_property(TEST e2e.topo-debug-rust.project_multi.build APPEND PROPERTY
             ENVIRONMENT_MODIFICATION
-                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-rust>")
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-rust>;PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-check>")
     endif()
 
     add_test(NAME e2e.topo-debug-rust.project_multi.sum_a
@@ -1356,7 +1358,7 @@ if(TARGET topo-debug-typescript-stage)
     set_tests_properties(e2e.topo-debug-typescript.project_simple.build PROPERTIES
         FIXTURES_SETUP project_simple_ts_built
         ENVIRONMENT_MODIFICATION
-            "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-typescript>"
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-typescript>;PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-check>"
         LABELS "e2e;topo-debug-typescript;toolchain"
         TIMEOUT 60)
 
@@ -1475,7 +1477,7 @@ if(TARGET topo-debug-typescript-stage)
     set_tests_properties(e2e.topo-debug-typescript.project_multi.build PROPERTIES
         FIXTURES_SETUP project_multi_ts_built
         ENVIRONMENT_MODIFICATION
-            "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-typescript>"
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-typescript>;PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-check>"
         LABELS "e2e;topo-debug-typescript;toolchain"
         TIMEOUT 60)
 
@@ -2667,7 +2669,7 @@ if(TARGET topo-debug-python)
     set_tests_properties(e2e.topo-debug-python.project_simple.build PROPERTIES
         FIXTURES_SETUP project_simple_py_built
         ENVIRONMENT_MODIFICATION
-            "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-python>"
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-python>;PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-check>"
         LABELS "e2e;topo-debug-python;toolchain"
         TIMEOUT 60)
 
@@ -2786,7 +2788,7 @@ if(TARGET topo-debug-python)
     set_tests_properties(e2e.topo-debug-python.project_multi.build PROPERTIES
         FIXTURES_SETUP project_multi_py_built
         ENVIRONMENT_MODIFICATION
-            "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-python>"
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-python>;PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-check>"
         LABELS "e2e;topo-debug-python;toolchain"
         TIMEOUT 60)
 
@@ -2856,5 +2858,130 @@ debugpy and re-run cmake to enable these.")
             SKIP_REGULAR_EXPRESSION "SKIPPED:"
             LABELS "e2e;topo-debug-python;toolchain"
             TIMEOUT 5)
+    endif()
+endif()
+
+# ─────────────────────────────────────────────────────────────────────
+# check-on-by-default e2e (label: check-default). Not a debug-adapter
+# block, but it lives in this file for the same reason the blocks above
+# do: it drives the real `topo-build` + `topo-check` binaries (topo-cli
+# sibling targets), and this module is the meta late-hook where those
+# targets resolve.
+#
+# Contract pinned (BuildConfig.h shouldRunCheck() — Auto checks EVERY
+# build):
+#   1. A project whose host code violates its .topo declarations fails a
+#      PLAIN `topo-build` (no flags, NO optimization sections) with the
+#      topo-check error — non-zero exit.
+#   2. `topo-build --no-check` on the same project skips the check stage
+#      and completes — the explicit escape hatch, quiet on a plain build
+#      (the loud UNVERIFIED warning is reserved for opt-outs that
+#      coincide with a declaration-consuming optimization).
+#   3. A clean project's no-change rebuild answers the default-on check
+#      from the incremental cache (`topo-check: cache hit`), keeping the
+#      overhead near zero.
+#
+# The fixtures are Java: the JVM backend needs no per-machine LLVM
+# toolchain, and the violating leg never reaches a backend at all.
+# Staged into the build tree at configure time (same pattern as the
+# per-language debug fixtures) so .topo-cache / .topo-check-cache never
+# land in the source tree.
+if(TARGET topo-build AND TARGET topo-check)
+    set(_CHECK_DEFAULT_STAGE ${CMAKE_BINARY_DIR}/check-default-e2e)
+    file(COPY ${_DBG_TEST_DIR}/fixtures/check_default/violating
+              ${_DBG_TEST_DIR}/fixtures/check_default/clean
+         DESTINATION ${_CHECK_DEFAULT_STAGE})
+
+    # topo-build resolves topo-check via its own exe dir, then PATH; in
+    # the build tree the two tools live in sibling dirs, so prepend the
+    # topo-check dir to PATH for every test in this block.
+    set(_CHECK_DEFAULT_PATH
+        "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-check>")
+
+    # (1a) The plain build must exit non-zero. WILL_FAIL inverts the
+    # exit-code check only — an abnormal termination (crash) still fails.
+    add_test(NAME e2e.check-default.violating.plain_build_fails
+        COMMAND $<TARGET_FILE:topo-build>
+        WORKING_DIRECTORY ${_CHECK_DEFAULT_STAGE}/violating)
+    set_tests_properties(e2e.check-default.violating.plain_build_fails PROPERTIES
+        WILL_FAIL TRUE
+        ENVIRONMENT_MODIFICATION "${_CHECK_DEFAULT_PATH}"
+        RESOURCE_LOCK check_default_violating_dir
+        LABELS "e2e;check-default;toolchain"
+        TIMEOUT 60)
+
+    # (1b) …and must name the check failure. Separate test because
+    # PASS_REGULAR_EXPRESSION replaces exit-code checking, so the two
+    # assertions cannot share one test. RESOURCE_LOCK serializes the
+    # tests sharing this fixture dir (concurrent .topo-cache writes).
+    add_test(NAME e2e.check-default.violating.plain_build_reports_check_error
+        COMMAND $<TARGET_FILE:topo-build>
+        WORKING_DIRECTORY ${_CHECK_DEFAULT_STAGE}/violating)
+    set_tests_properties(e2e.check-default.violating.plain_build_reports_check_error PROPERTIES
+        PASS_REGULAR_EXPRESSION "topo-check failed"
+        ENVIRONMENT_MODIFICATION "${_CHECK_DEFAULT_PATH}"
+        RESOURCE_LOCK check_default_violating_dir
+        LABELS "e2e;check-default;toolchain"
+        TIMEOUT 60)
+
+    # Legs (2) + (3) complete real JVM builds — same backend + runtime
+    # JDK (≥21, for the Gradle-built transform jar) gate as the
+    # topo-debug-java project fixtures above.
+    if(TARGET topo-build-jvm-java AND TOPO_DEBUG_JAVA_RUNTIME_HOME AND NOT WIN32)
+        set(_CHECK_DEFAULT_JVM_PATH
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-jvm-java>;PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-check>")
+
+        # (2) --no-check skips the check stage and the build completes
+        # (exit 0) even though the project violates its declarations.
+        add_test(NAME e2e.check-default.violating.no_check_escape_hatch_builds
+            COMMAND $<TARGET_FILE:topo-build> --no-check
+            WORKING_DIRECTORY ${_CHECK_DEFAULT_STAGE}/violating)
+        set_tests_properties(e2e.check-default.violating.no_check_escape_hatch_builds PROPERTIES
+            FAIL_REGULAR_EXPRESSION "Running topo-check;topo-check failed"
+            ENVIRONMENT "JAVA_HOME=${TOPO_DEBUG_JAVA_RUNTIME_HOME}"
+            ENVIRONMENT_MODIFICATION "${_CHECK_DEFAULT_PATH};${_CHECK_DEFAULT_JVM_PATH}"
+            RESOURCE_LOCK check_default_violating_dir
+            LABELS "e2e;check-default;toolchain"
+            TIMEOUT 120)
+
+        # (3) Clean fixture: the first build passes the default-on check
+        # and populates .topo-check-cache…
+        add_test(NAME e2e.check-default.clean.build
+            COMMAND $<TARGET_FILE:topo-build>
+            WORKING_DIRECTORY ${_CHECK_DEFAULT_STAGE}/clean)
+        set_tests_properties(e2e.check-default.clean.build PROPERTIES
+            FIXTURES_SETUP check_default_clean_built
+            ENVIRONMENT "JAVA_HOME=${TOPO_DEBUG_JAVA_RUNTIME_HOME}"
+            ENVIRONMENT_MODIFICATION "${_CHECK_DEFAULT_PATH};${_CHECK_DEFAULT_JVM_PATH}"
+            RESOURCE_LOCK check_default_clean_dir
+            LABELS "e2e;check-default;toolchain"
+            TIMEOUT 120)
+
+        # …the no-change rebuild answers it from the incremental cache
+        # (text assertion only — cheap and non-flaky; no timing)…
+        add_test(NAME e2e.check-default.clean.rebuild_hits_check_cache
+            COMMAND $<TARGET_FILE:topo-build>
+            WORKING_DIRECTORY ${_CHECK_DEFAULT_STAGE}/clean)
+        set_tests_properties(e2e.check-default.clean.rebuild_hits_check_cache PROPERTIES
+            PASS_REGULAR_EXPRESSION "topo-check: cache hit"
+            FIXTURES_REQUIRED check_default_clean_built
+            ENVIRONMENT "JAVA_HOME=${TOPO_DEBUG_JAVA_RUNTIME_HOME}"
+            ENVIRONMENT_MODIFICATION "${_CHECK_DEFAULT_PATH};${_CHECK_DEFAULT_JVM_PATH}"
+            RESOURCE_LOCK check_default_clean_dir
+            LABELS "e2e;check-default;toolchain"
+            TIMEOUT 120)
+
+        # …and still exits 0 (regex tests ignore the exit code, so the
+        # success is re-asserted separately).
+        add_test(NAME e2e.check-default.clean.rebuild_succeeds
+            COMMAND $<TARGET_FILE:topo-build>
+            WORKING_DIRECTORY ${_CHECK_DEFAULT_STAGE}/clean)
+        set_tests_properties(e2e.check-default.clean.rebuild_succeeds PROPERTIES
+            FIXTURES_REQUIRED check_default_clean_built
+            ENVIRONMENT "JAVA_HOME=${TOPO_DEBUG_JAVA_RUNTIME_HOME}"
+            ENVIRONMENT_MODIFICATION "${_CHECK_DEFAULT_PATH};${_CHECK_DEFAULT_JVM_PATH}"
+            RESOURCE_LOCK check_default_clean_dir
+            LABELS "e2e;check-default;toolchain"
+            TIMEOUT 120)
     endif()
 endif()
