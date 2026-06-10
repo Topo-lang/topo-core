@@ -51,6 +51,15 @@ if(TOPO_CORE_WITH_LANG)
         endif()
     endforeach()
 
+    # ── stdio helper for the process/platform suites ──
+    # PipedProcessTest + ProcessSpawnTest spawn this tiny binary (cat /
+    # echo-lines / echo-args / exit / sleep modes) instead of /bin/cat, so
+    # those suites run — without skips — on Windows too, where PipedProcess /
+    # runProcess use the raw-Win32 backend. It is spawned at test runtime,
+    # not linked, hence the add_dependencies below.
+    add_executable(topo-process-test-helper helpers/ProcessTestHelper.cpp)
+    topo_set_compiler_flags(topo-process-test-helper)
+
     add_executable(topo-core-tests
         unit/LexerTest.cpp
         unit/ParserTest.cpp
@@ -64,6 +73,7 @@ if(TOPO_CORE_WITH_LANG)
         unit/VisibilityPolicyTest.cpp
         unit/ImportPathCheckTest.cpp
         unit/PipedProcessTest.cpp
+        unit/ProcessSpawnTest.cpp
         unit/TempFileTest.cpp
         unit/SanitizeTest.cpp
         unit/FrontendPerfTest.cpp
@@ -115,7 +125,9 @@ if(TOPO_CORE_WITH_LANG)
     target_compile_definitions(topo-core-tests PRIVATE
         TOPO_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures"
         TOPO_SPEC_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/language/spec"
+        TOPO_PROCESS_TEST_HELPER="$<TARGET_FILE:topo-process-test-helper>"
     )
+    add_dependencies(topo-core-tests topo-process-test-helper)
     topo_set_compiler_flags(topo-core-tests)
     topo_apply_std_pch(topo-core-tests)
     # DISCOVERY_TIMEOUT 30: the CMake default is 5s, too tight for a heavily

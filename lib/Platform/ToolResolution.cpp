@@ -87,6 +87,60 @@ std::string findOnPath(const std::string& name) {
     return {};
 }
 
+namespace {
+
+/// Suffix probe order for findSpawnableOnPath. Differs from PATHEXT (used
+/// by findOnPath) in two deliberate ways: only suffixes the spawn layer can
+/// actually execute are listed (.exe directly; .cmd/.bat via cmd.exe), and
+/// the bare name comes LAST — npm-style installs stage a POSIX-shell shim
+/// beside `<name>.cmd` in the same directory, and the shell shim is not a
+/// valid CreateProcess image. A name that already carries an extension is
+/// trusted as-given first.
+std::vector<std::string> spawnSuffixes(const std::string& name) {
+    if constexpr (!IsWindows) {
+        return {""};
+    }
+    if (!fs::path(name).extension().empty()) {
+        return {"", ".exe", ".cmd", ".bat"};
+    }
+    return {".exe", ".cmd", ".bat", ""};
+}
+
+} // namespace
+
+std::string findSpawnableOnPath(const std::string& name) {
+    if (name.empty()) return {};
+    const auto exts = spawnSuffixes(name);
+    std::error_code ec;
+
+    // Absolute / relative path with directory: skip the PATH walk, but
+    // still probe the spawnable suffixes so "C:\\tools\\npm" finds
+    // "C:\\tools\\npm.cmd".
+    fs::path nameAsPath(name);
+    if (nameAsPath.has_parent_path()) {
+        for (const auto& ext : exts) {
+            fs::path candidate(name + ext);
+            if (fs::is_regular_file(candidate, ec)) {
+                return fs::absolute(candidate, ec).string();
+            }
+        }
+        return {};
+    }
+
+    for (const auto& dir : pathDirs()) {
+        for (const auto& ext : exts) {
+            fs::path candidate = dir / (name + ext);
+            if (fs::is_regular_file(candidate, ec)) {
+                // PATH entries may be relative; the spawn layer needs an
+                // absolute path (it may pass the result to cmd.exe, whose
+                // working directory is not ours to control).
+                return fs::absolute(candidate, ec).string();
+            }
+        }
+    }
+    return {};
+}
+
 std::vector<std::string> findPythonInterpreter() {
     // Explicit override always wins.
     for (const char* env : {"TOPO_PYTHON", "TOPO_PYTHON_EXE"}) {

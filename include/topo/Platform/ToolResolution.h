@@ -73,6 +73,27 @@ std::string resolveLLVMTool(const std::string& toolName);
 /// looked up verbatim. Returns an empty string if not found.
 std::string findOnPath(const std::string& name);
 
+/// Spawn-oriented executable resolution. Returns the ABSOLUTE path of the
+/// on-disk file a spawn of ``name`` should execute, or an empty string when
+/// nothing resolvable is found.
+///
+/// On POSIX this is a plain PATH walk for the bare name (execvp semantics).
+/// On Windows it exists because ``CreateProcessW`` appends only ``.exe``
+/// when resolving a bare program name, so script launchers staged as
+/// ``<name>.cmd`` / ``<name>.bat`` (npm shims, jdtls, the staged
+/// ``topo-extract-*`` tools) are never found. Per PATH directory the probe
+/// order is ``<name>.exe``, ``<name>.cmd``, ``<name>.bat``, then the bare
+/// ``<name>`` — executable images first, and the extensionless name last
+/// because npm-style installs stage a POSIX-shell shim *beside* the
+/// ``.cmd`` and the shell shim is not a valid CreateProcess image. When
+/// ``name`` already carries an extension it is probed as-given first. Other
+/// ``PATHEXT`` entries (``.VBS``, ``.JS``, ...) are not probed: the spawn
+/// layer can only run a PE image directly or a batch script via
+/// ``cmd.exe /c``. Names containing a directory separator skip the PATH
+/// walk and are probed (with the same suffix list) relative to the caller's
+/// working directory.
+std::string findSpawnableOnPath(const std::string& name);
+
 /// Locate a Python 3 interpreter and return the argv prefix to invoke
 /// it with. The first element is the executable; subsequent elements
 /// are leading flags (e.g. ``{"py.exe", "-3"}`` for the Windows launcher).
