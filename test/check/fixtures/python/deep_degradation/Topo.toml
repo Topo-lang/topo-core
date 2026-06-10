@@ -1,0 +1,9 @@
+[project]
+name = "deep_degradation"
+
+[topo]
+root = "topo/main.topo"
+
+[build]
+language = "python"
+sources = ["src/*.py"]
