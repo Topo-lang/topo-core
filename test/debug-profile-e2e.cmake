@@ -247,6 +247,16 @@ if(TOPO_ENABLE_LLVM AND NOT WIN32 AND TARGET topo-debug-cpp AND TARGET tiny_matr
         FIXTURES_SETUP project_simple_built
         LABELS "e2e;topo-debug-cpp;toolchain"
         TIMEOUT 60)
+    # topo-build locates its backend driver in its own exe dir or on PATH;
+    # in the build tree the driver lives in the sibling package's dir, so
+    # prepend it (otherwise the build step can only pass against an
+    # installed toolchain — never in a fresh tree). Guarded: this section's
+    # gate does not imply the driver target exists in every configure.
+    if(TARGET topo-build-llvm-cpp)
+        set_property(TEST e2e.topo-debug-cpp.project_simple.build APPEND PROPERTY
+            ENVIRONMENT_MODIFICATION
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-cpp>")
+    endif()
 
     add_test(NAME e2e.topo-debug-cpp.project_simple.view_first_half_sum
         COMMAND ${_TOPO_DEBUG_BIN} query "sum(first_half)"
@@ -417,6 +427,12 @@ if(TOPO_ENABLE_LLVM AND NOT WIN32 AND TARGET topo-debug-cpp AND TARGET tiny_matr
         FIXTURES_SETUP project_multi_built
         LABELS "e2e;topo-debug-cpp;toolchain"
         TIMEOUT 60)
+    # See project_simple.build: the backend driver dir must be on PATH.
+    if(TARGET topo-build-llvm-cpp)
+        set_property(TEST e2e.topo-debug-cpp.project_multi.build APPEND PROPERTY
+            ENVIRONMENT_MODIFICATION
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-cpp>")
+    endif()
 
     add_test(NAME e2e.topo-debug-cpp.project_multi.summary
         COMMAND ${_TOPO_DEBUG_BIN} summary "TwoArrays"
@@ -445,6 +461,12 @@ if(TOPO_ENABLE_LLVM AND NOT WIN32 AND TARGET topo-debug-cpp AND TARGET tiny_matr
     set_tests_properties(e2e.topo-debug-cpp.project_chart.build PROPERTIES
         LABELS "e2e;topo-debug-cpp;toolchain"
         TIMEOUT 60)
+    # See project_simple.build: the backend driver dir must be on PATH.
+    if(TARGET topo-build-llvm-cpp)
+        set_property(TEST e2e.topo-debug-cpp.project_chart.build APPEND PROPERTY
+            ENVIRONMENT_MODIFICATION
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-cpp>")
+    endif()
 endif()
 
 # ===========================================================================
@@ -479,11 +501,13 @@ if(Python3_FOUND AND NOT WIN32)
     # project_formatter fixture once as a setup fixture so both the C++ and
     # Rust unit runs (the formatter core is host-agnostic) read the same
     # canonical artifact emitted by `topo build`.
-    # TOPO_DEBUG_CPP_PROJECT_FORMATTER_DIR is only populated when
-    # TOPO_ENABLE_LLVM=ON (topo-lang-cpp/topo-debug returns early
-    # otherwise), so the fixture-build test would fail at run-time with
-    # "no Topo.toml found" in LLVM-off builds. Gate the registration.
-    if(TARGET topo-build AND TOPO_ENABLE_LLVM)
+    # TOPO_DEBUG_CPP_PROJECT_FORMATTER_DIR is populated only when
+    # topo-lang-cpp/topo-debug/test configures (liblldb present AND the
+    # fixture subdir enabled); a configure can define the adapter targets
+    # without it, and the fixture-build test would then fail at run-time
+    # with "no Topo.toml found" — gate on the variable itself.
+    if(TARGET topo-build AND TOPO_ENABLE_LLVM
+       AND TOPO_DEBUG_CPP_PROJECT_FORMATTER_DIR)
         set(_FMT_DIR ${TOPO_DEBUG_CPP_PROJECT_FORMATTER_DIR})
         add_test(NAME e2e.topo-debug-cpp.formatter_fixture_build
             COMMAND $<TARGET_FILE:topo-build>
@@ -493,6 +517,13 @@ if(Python3_FOUND AND NOT WIN32)
                 FIXTURES_SETUP formatter_fixture_built
                 LABELS "e2e;topo-debug-cpp;toolchain;topo-debug-formatter"
                 TIMEOUT 60)
+        # The backend driver dir must be on PATH (topo-build searches only
+        # its own exe dir + PATH for topo-build-llvm-cpp).
+        if(TARGET topo-build-llvm-cpp)
+            set_property(TEST e2e.topo-debug-cpp.formatter_fixture_build
+                APPEND PROPERTY ENVIRONMENT_MODIFICATION
+                    "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-cpp>")
+        endif()
 
         add_test(NAME e2e.topo-debug-cpp.formatter_unit
             COMMAND ${Python3_EXECUTABLE} ${_FMT_UNIT}
@@ -515,28 +546,38 @@ if(Python3_FOUND AND NOT WIN32)
     # `.lldbinit` that imports the scaffold's lldb_formatter.py. Verified
     # against the real topo-init binary (the providers' generateLldbInit /
     # lldbFormatterScript flow end-to-end).
+    # topo-init's cpp/rust providers extract symbols from the seed source,
+    # which needs the language plugin linked into the CLI ("no symbol
+    # extractor available" otherwise) — gate each on its plugin target.
     if(TARGET topo-init)
         set(_INIT_LLDB_DRIVER
             "${PROJECT_SOURCE_DIR}/topo-lang-cpp/topo-debug/test/init_lldbinit_driver.py")
-        add_test(NAME e2e.topo-debug-cpp.init_lldbinit
-            COMMAND ${Python3_EXECUTABLE} ${_INIT_LLDB_DRIVER}
-                    $<TARGET_FILE:topo-init> cpp main.cpp)
-        set_tests_properties(e2e.topo-debug-cpp.init_lldbinit PROPERTIES
-            LABELS "e2e;topo-debug-cpp;toolchain;topo-debug-formatter"
-            TIMEOUT 90)
-        add_test(NAME e2e.topo-debug-rust.init_lldbinit
-            COMMAND ${Python3_EXECUTABLE} ${_INIT_LLDB_DRIVER}
-                    $<TARGET_FILE:topo-init> rust main.rs)
-        set_tests_properties(e2e.topo-debug-rust.init_lldbinit PROPERTIES
-            LABELS "e2e;topo-debug-rust;toolchain;topo-debug-formatter"
-            TIMEOUT 30)
+        if(TARGET TopoCppPlugin)
+            add_test(NAME e2e.topo-debug-cpp.init_lldbinit
+                COMMAND ${Python3_EXECUTABLE} ${_INIT_LLDB_DRIVER}
+                        $<TARGET_FILE:topo-init> cpp main.cpp)
+            set_tests_properties(e2e.topo-debug-cpp.init_lldbinit PROPERTIES
+                LABELS "e2e;topo-debug-cpp;toolchain;topo-debug-formatter"
+                TIMEOUT 90)
+        endif()
+        if(TARGET TopoRustPlugin)
+            add_test(NAME e2e.topo-debug-rust.init_lldbinit
+                COMMAND ${Python3_EXECUTABLE} ${_INIT_LLDB_DRIVER}
+                        $<TARGET_FILE:topo-init> rust main.rs)
+            set_tests_properties(e2e.topo-debug-rust.init_lldbinit PROPERTIES
+                LABELS "e2e;topo-debug-rust;toolchain;topo-debug-formatter"
+                TIMEOUT 30)
+        endif()
     endif()
 
     # In-debugger e2e — gated exactly like the rest of the topo-debug-cpp
     # adapter suite (TOPO_ENABLE_LLVM + non-Windows + the adapter target,
-    # which implies a bundled liblldb). The driver additionally skips
-    # cleanly when that lldb has no Python script interpreter.
-    if(TOPO_ENABLE_LLVM AND NOT WIN32 AND TARGET topo-debug-cpp AND TARGET topo-build)
+    # which implies a bundled liblldb), PLUS the cpp backend driver: the
+    # python driver builds the formatter project with topo-build for real,
+    # which dispatches to topo-build-llvm-cpp. The driver additionally
+    # skips cleanly when that lldb has no Python script interpreter.
+    if(TOPO_ENABLE_LLVM AND NOT WIN32 AND TARGET topo-debug-cpp AND TARGET topo-build
+       AND TARGET topo-build-llvm-cpp)
         # The bundled topo-llvm/llvm-dev lldb is script-free, so the e2e
         # could only ever skip. Prefer a Python-scripting-enabled lldb
         # (probed at configure time) so this acceptance actually runs
@@ -582,6 +623,13 @@ if(Python3_FOUND AND NOT WIN32)
             SKIP_REGULAR_EXPRESSION "SKIPPED:"
             LABELS "e2e;topo-debug-cpp;toolchain;topo-debug-formatter"
             TIMEOUT 120)
+        # The driver spawns topo-build, which locates topo-build-llvm-cpp
+        # via its own exe dir or PATH — prepend the driver's build dir.
+        if(TARGET topo-build-llvm-cpp)
+            set_property(TEST e2e.topo-debug-cpp.formatter_e2e APPEND PROPERTY
+                ENVIRONMENT_MODIFICATION
+                    "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-cpp>")
+        endif()
     endif()
 else()
     message(STATUS
@@ -686,6 +734,14 @@ if(TARGET topo-debug-java AND TOPO_DEBUG_JAVA_RUNTIME_HOME AND NOT WIN32)
         ENVIRONMENT "JAVA_HOME=${TOPO_DEBUG_JAVA_RUNTIME_HOME}"
         LABELS "e2e;topo-debug-java;toolchain"
         TIMEOUT 120)
+    # The backend driver dir must be on PATH (topo-build searches only its
+    # own exe dir + PATH for topo-build-jvm-java). Guarded: the section
+    # gate does not imply the driver target exists in every configure.
+    if(TARGET topo-build-jvm-java)
+        set_property(TEST e2e.topo-debug-java.project_simple.build APPEND PROPERTY
+            ENVIRONMENT_MODIFICATION
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-jvm-java>")
+    endif()
 
     # All query/summary/snapshot tests below pass `--debug-meta` explicitly
     # because the produced JAR is `main.jar` while `--target` is a sibling
@@ -810,6 +866,12 @@ if(TARGET topo-debug-java AND TOPO_DEBUG_JAVA_RUNTIME_HOME AND NOT WIN32)
         ENVIRONMENT "JAVA_HOME=${TOPO_DEBUG_JAVA_RUNTIME_HOME}"
         LABELS "e2e;topo-debug-java;toolchain"
         TIMEOUT 120)
+    # See project_simple.build: the backend driver dir must be on PATH.
+    if(TARGET topo-build-jvm-java)
+        set_property(TEST e2e.topo-debug-java.project_multi.build APPEND PROPERTY
+            ENVIRONMENT_MODIFICATION
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-jvm-java>")
+    endif()
 
     add_test(NAME e2e.topo-debug-java.project_multi.sum_a
         COMMAND ${_TOPO_DEBUG_BIN} query "sum(a)"
@@ -987,7 +1049,14 @@ endif()
 # declaration and the next observable use the locals are reported "not
 # in scope" even with intervening `black_box(&data)` (cpp doesn't have
 # this quirk so its sibling fixtures use a literal sentinel line).
-if(TOPO_ENABLE_LLVM AND NOT WIN32 AND TARGET topo-debug-rust)
+# Also require the fixture dirs exported by topo-lang-rust/topo-debug/test
+# (TOPO_LANG_RUST_BUILD_TEST_FIXTURES): the adapter target can exist in
+# configures that skip that subdir, and registering the project tests with
+# an unset dir runs topo-build in an empty WORKING_DIRECTORY ("no Topo.toml
+# found"). Both dirs come from the same subdir, but a stale build-tree cache
+# can carry one without the other — require both.
+if(TOPO_ENABLE_LLVM AND NOT WIN32 AND TARGET topo-debug-rust
+   AND TOPO_DEBUG_RUST_PROJECT_SIMPLE_DIR AND TOPO_DEBUG_RUST_PROJECT_MULTI_DIR)
     set(_TOPO_DEBUG_RUST "$<TARGET_FILE:topo-debug-rust>")
     set(_TOPO_BUILD_BIN "$<TARGET_FILE:topo-build>")
 
@@ -1006,6 +1075,14 @@ if(TOPO_ENABLE_LLVM AND NOT WIN32 AND TARGET topo-debug-rust)
         FIXTURES_SETUP project_simple_rs_built
         LABELS "e2e;topo-debug-rust;toolchain"
         TIMEOUT 120)
+    # The backend driver dir must be on PATH (topo-build searches only its
+    # own exe dir + PATH for topo-build-llvm-rust). Guarded: the section
+    # gate does not imply the driver target exists in every configure.
+    if(TARGET topo-build-llvm-rust)
+        set_property(TEST e2e.topo-debug-rust.project_simple.build APPEND PROPERTY
+            ENVIRONMENT_MODIFICATION
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-rust>")
+    endif()
 
     add_test(NAME e2e.topo-debug-rust.project_simple.view_first_half_sum
         COMMAND ${_TOPO_DEBUG_BIN} query "sum(first_half)"
@@ -1119,6 +1196,12 @@ if(TOPO_ENABLE_LLVM AND NOT WIN32 AND TARGET topo-debug-rust)
         FIXTURES_SETUP project_multi_rs_built
         LABELS "e2e;topo-debug-rust;toolchain"
         TIMEOUT 120)
+    # See project_simple.build: the backend driver dir must be on PATH.
+    if(TARGET topo-build-llvm-rust)
+        set_property(TEST e2e.topo-debug-rust.project_multi.build APPEND PROPERTY
+            ENVIRONMENT_MODIFICATION
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-llvm-rust>")
+    endif()
 
     add_test(NAME e2e.topo-debug-rust.project_multi.sum_a
         COMMAND ${_TOPO_DEBUG_BIN} query "sum(data_a)"
@@ -1266,8 +1349,14 @@ if(TARGET topo-debug-typescript-stage)
     add_test(NAME e2e.topo-debug-typescript.project_simple.build
         COMMAND ${_TOPO_BUILD_BIN}
         WORKING_DIRECTORY ${_PROJECT_SIMPLE_TS_DIR})
+    # topo-build locates its backend driver in its own exe dir or on PATH;
+    # in the build tree the driver lives in the sibling package's dir, so
+    # prepend it (otherwise the build step can only pass against an
+    # installed toolchain — never in a fresh tree).
     set_tests_properties(e2e.topo-debug-typescript.project_simple.build PROPERTIES
         FIXTURES_SETUP project_simple_ts_built
+        ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-typescript>"
         LABELS "e2e;topo-debug-typescript;toolchain"
         TIMEOUT 60)
 
@@ -1382,8 +1471,11 @@ if(TARGET topo-debug-typescript-stage)
     add_test(NAME e2e.topo-debug-typescript.project_multi.build
         COMMAND ${_TOPO_BUILD_BIN}
         WORKING_DIRECTORY ${_PROJECT_MULTI_TS_DIR})
+    # See project_simple.build: the backend driver dir must be on PATH.
     set_tests_properties(e2e.topo-debug-typescript.project_multi.build PROPERTIES
         FIXTURES_SETUP project_multi_ts_built
+        ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-typescript>"
         LABELS "e2e;topo-debug-typescript;toolchain"
         TIMEOUT 60)
 
@@ -2568,8 +2660,14 @@ if(TARGET topo-debug-python)
     add_test(NAME e2e.topo-debug-python.project_simple.build
         COMMAND ${_TOPO_BUILD_BIN}
         WORKING_DIRECTORY ${_PROJECT_SIMPLE_PY_DIR})
+    # topo-build locates its backend driver in its own exe dir or on PATH;
+    # in the build tree the driver lives in the sibling package's dir, so
+    # prepend it (otherwise the build step can only pass against an
+    # installed toolchain — never in a fresh tree).
     set_tests_properties(e2e.topo-debug-python.project_simple.build PROPERTIES
         FIXTURES_SETUP project_simple_py_built
+        ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-python>"
         LABELS "e2e;topo-debug-python;toolchain"
         TIMEOUT 60)
 
@@ -2684,8 +2782,11 @@ if(TARGET topo-debug-python)
     add_test(NAME e2e.topo-debug-python.project_multi.build
         COMMAND ${_TOPO_BUILD_BIN}
         WORKING_DIRECTORY ${_PROJECT_MULTI_PY_DIR})
+    # See project_simple.build: the backend driver dir must be on PATH.
     set_tests_properties(e2e.topo-debug-python.project_multi.build PROPERTIES
         FIXTURES_SETUP project_multi_py_built
+        ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:topo-build-python>"
         LABELS "e2e;topo-debug-python;toolchain"
         TIMEOUT 60)
 
