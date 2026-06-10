@@ -221,3 +221,78 @@ TEST(CheckRunner, JobsBenchmark_100Files_ParallelSpeedup) {
     EXPECT_GT(ms8, 0);
     EXPECT_GT(speedup, 1.0) << "parallel should not be slower than sequential";
 }
+
+// --- Deep mode refuses to degrade silently ---
+
+#ifdef _WIN32
+#define topo_putenv(k, v) _putenv_s(k, v)
+#define topo_unsetenv(k) _putenv_s(k, "")
+#else
+#define topo_putenv(k, v) ::setenv(k, v, 1)
+#define topo_unsetenv(k) ::unsetenv(k)
+#endif
+
+namespace {
+// Save/restore an env var across a test (same idiom as TempFileTest).
+class ScopedEnv {
+public:
+    ScopedEnv(const char* name, const char* value) : name_(name) {
+        const char* prev = std::getenv(name);
+        had_ = (prev != nullptr);
+        if (had_) prev_ = prev;
+        if (value) topo_putenv(name, value);
+        else topo_unsetenv(name);
+    }
+    ~ScopedEnv() {
+        if (had_) topo_putenv(name_, prev_.c_str());
+        else topo_unsetenv(name_);
+    }
+private:
+    const char* name_;
+    std::string prev_;
+    bool had_;
+};
+} // namespace
+
+// --deep promises L2 analysis; when the language server cannot start, the
+// run must refuse (exit 2) instead of silently substituting regex-grade
+// extraction and possibly PASSing at a shallower grade than requested
+// (no-silent-degradation principle: disabled safety check == Error).
+//
+// Uses the python fixture deliberately: PyrightBridge resolves
+// `pyright-langserver` from PATH on every start, so gutting PATH is a
+// deterministic, order-independent way to make LSP init fail. (The cpp
+// bridge resolves clangd through the BYO-LLVM toolchain chain, which is
+// memoized per process and consults non-PATH tiers — not controllable
+// from a test.)
+TEST(CheckRunner, DeepModeWithoutLanguageServerFailsLoudly) {
+    CheckConfig cfg;
+    cfg.projectDir = fixtureDir("python/deep_degradation");
+    cfg.checkName = "all";
+    cfg.deepMode = true;
+    // A cached deep verdict would short-circuit before LSP init — drop any
+    // cache left in the fixture dir by other tests or earlier binaries.
+    std::error_code ec;
+    std::filesystem::remove(
+        std::filesystem::path(cfg.projectDir) / ".topo-check-cache", ec);
+    // Gut PATH so the pyright probe cannot resolve the language server.
+    // The frontend (lexer/parser/sema) is in-process and unaffected; the
+    // run aborts at LSP init, before any extractor subprocess is needed.
+    ScopedEnv path("PATH", "");
+    CheckRunner runner(cfg);
+    ASSERT_TRUE(runner.loadConfig());
+    EXPECT_EQ(runner.run(), 2);
+}
+
+// Control: the same project and PATH gutting without --deep stays a normal
+// L1 run — proving the refusal above is specific to the requested-deep
+// contract, not a general PATH sensitivity.
+TEST(CheckRunner, L1WithoutLanguageServerStillRuns) {
+    CheckConfig cfg;
+    cfg.projectDir = fixtureDir("cpp/completeness_pass");
+    cfg.checkName = "completeness";
+    ScopedEnv path("PATH", "");
+    CheckRunner runner(cfg);
+    ASSERT_TRUE(runner.loadConfig());
+    EXPECT_EQ(runner.run(), 0);
+}
