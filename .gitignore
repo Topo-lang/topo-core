@@ -34,6 +34,11 @@ Testing/
 .DS_Store
 Thumbs.db
 
+# topo-check cache — CheckRunner writes it into the project dir it runs
+# on. Tests copy fixtures to a temp dir first; this covers manual runs
+# against the source-tree fixtures.
+.topo-check-cache
+
 # Python (test scratch only)
 __pycache__/
 *.pyc

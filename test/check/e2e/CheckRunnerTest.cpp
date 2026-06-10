@@ -21,11 +21,51 @@ static std::string fixtureDir(const char* name) {
     return std::string(TOPO_TEST_FIXTURES_DIR) + "/" + name;
 }
 
+namespace {
+
+// CheckRunner writes .topo-check-cache into the project dir it runs on.
+// Running in-place against the source-tree fixtures leaves the cache as an
+// untracked file in the working tree, and a stale cache from an OLDER
+// binary can short-circuit runner.run() and mask the behavior under test
+// (observed: a pre-degradation-fix deep cache hid the LSP-init failure
+// path). Each test therefore runs against a fresh copy in the temp dir —
+// same pattern as the tpm CLI suites.
+class FixtureCopy {
+public:
+    explicit FixtureCopy(const char* name) {
+        namespace fs = std::filesystem;
+        std::mt19937 rng(static_cast<uint32_t>(
+            std::chrono::steady_clock::now().time_since_epoch().count()));
+        dir_ = fs::temp_directory_path() /
+            ("topo-check-fixture-" + std::to_string(rng()));
+        std::error_code ec;
+        fs::copy(fixtureDir(name), dir_, fs::copy_options::recursive, ec);
+        if (ec) {
+            ADD_FAILURE() << "copy fixture " << name << " -> " << dir_
+                          << ": " << ec.message();
+        }
+    }
+    ~FixtureCopy() {
+        std::error_code ec;
+        std::filesystem::remove_all(dir_, ec);
+    }
+    FixtureCopy(const FixtureCopy&) = delete;
+    FixtureCopy& operator=(const FixtureCopy&) = delete;
+
+    std::string path() const { return dir_.string(); }
+
+private:
+    std::filesystem::path dir_;
+};
+
+} // namespace
+
 // --- Combined "all" mode ---
 
 TEST(CheckRunner, AllChecksOnPassProject) {
+    FixtureCopy fixture("cpp/completeness_pass");
     CheckConfig cfg;
-    cfg.projectDir = fixtureDir("cpp/completeness_pass");
+    cfg.projectDir = fixture.path();
     cfg.checkName = "all";
     CheckRunner runner(cfg);
     ASSERT_TRUE(runner.loadConfig());
@@ -35,8 +75,9 @@ TEST(CheckRunner, AllChecksOnPassProject) {
 // --- JSON output ---
 
 TEST(CheckRunner, JsonOutputDoesNotCrash) {
+    FixtureCopy fixture("cpp/completeness_pass");
     CheckConfig cfg;
-    cfg.projectDir = fixtureDir("cpp/completeness_pass");
+    cfg.projectDir = fixture.path();
     cfg.checkName = "completeness";
     cfg.jsonOutput = true;
     CheckRunner runner(cfg);
@@ -48,8 +89,9 @@ TEST(CheckRunner, JsonOutputDoesNotCrash) {
 // --- Filter ---
 
 TEST(CheckRunner, FilterMatchesSubstring) {
+    FixtureCopy fixture("cpp/completeness_pass");
     CheckConfig cfg;
-    cfg.projectDir = fixtureDir("cpp/completeness_pass");
+    cfg.projectDir = fixture.path();
     cfg.checkName = "all";
     cfg.filter = "complete";
     CheckRunner runner(cfg);
@@ -59,8 +101,9 @@ TEST(CheckRunner, FilterMatchesSubstring) {
 }
 
 TEST(CheckRunner, FilterNoMatch) {
+    FixtureCopy fixture("cpp/completeness_pass");
     CheckConfig cfg;
-    cfg.projectDir = fixtureDir("cpp/completeness_pass");
+    cfg.projectDir = fixture.path();
     cfg.checkName = "all";
     cfg.filter = "nonexistent";
     CheckRunner runner(cfg);
@@ -266,15 +309,13 @@ private:
 // memoized per process and consults non-PATH tiers — not controllable
 // from a test.)
 TEST(CheckRunner, DeepModeWithoutLanguageServerFailsLoudly) {
+    // A cached deep verdict would short-circuit before LSP init; the
+    // FixtureCopy guarantees a cache-free project dir.
+    FixtureCopy fixture("python/deep_degradation");
     CheckConfig cfg;
-    cfg.projectDir = fixtureDir("python/deep_degradation");
+    cfg.projectDir = fixture.path();
     cfg.checkName = "all";
     cfg.deepMode = true;
-    // A cached deep verdict would short-circuit before LSP init — drop any
-    // cache left in the fixture dir by other tests or earlier binaries.
-    std::error_code ec;
-    std::filesystem::remove(
-        std::filesystem::path(cfg.projectDir) / ".topo-check-cache", ec);
     // Gut PATH so the pyright probe cannot resolve the language server.
     // The frontend (lexer/parser/sema) is in-process and unaffected; the
     // run aborts at LSP init, before any extractor subprocess is needed.
@@ -288,8 +329,9 @@ TEST(CheckRunner, DeepModeWithoutLanguageServerFailsLoudly) {
 // L1 run — proving the refusal above is specific to the requested-deep
 // contract, not a general PATH sensitivity.
 TEST(CheckRunner, L1WithoutLanguageServerStillRuns) {
+    FixtureCopy fixture("cpp/completeness_pass");
     CheckConfig cfg;
-    cfg.projectDir = fixtureDir("cpp/completeness_pass");
+    cfg.projectDir = fixture.path();
     cfg.checkName = "completeness";
     ScopedEnv path("PATH", "");
     CheckRunner runner(cfg);
