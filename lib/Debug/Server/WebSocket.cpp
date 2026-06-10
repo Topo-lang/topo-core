@@ -166,6 +166,25 @@ std::string wsAcceptHeader(const std::string& clientKey) {
     return base64(sha1(clientKey + kMagic));
 }
 
+// Pure (no socket I/O): defined unconditionally so it is testable on every
+// platform. Allows an absent Origin (non-browser client) or a loopback origin;
+// rejects every cross-origin value, including the opaque "null".
+bool wsOriginAllowed(const std::string& origin) {
+    if (origin.empty()) return true;
+    auto schemeEnd = origin.find("://");
+    if (schemeEnd == std::string::npos) return false; // "null" / opaque / malformed
+    std::string rest = origin.substr(schemeEnd + 3);
+    std::string host;
+    if (!rest.empty() && rest.front() == '[') {        // IPv6 literal, e.g. [::1]
+        auto close = rest.find(']');
+        if (close == std::string::npos) return false;
+        host = rest.substr(1, close - 1);
+    } else {
+        host = rest.substr(0, rest.find_first_of(":/"));
+    }
+    return host == "127.0.0.1" || host == "localhost" || host == "::1";
+}
+
 bool wsCompleteHandshake(int connFd,
                          const std::map<std::string, std::string>& headers) {
 #ifdef _WIN32
@@ -174,6 +193,17 @@ bool wsCompleteHandshake(int connFd,
 #else
     auto it = headers.find("sec-websocket-key");
     if (it == headers.end() || it->second.empty()) return false;
+    // Cross-Site WebSocket Hijacking defense: browsers always send Origin on a
+    // WS upgrade, so a cross-origin page the developer happens to visit must not
+    // be able to open ws://127.0.0.1:<port>/ws and drive the debugger. Reject
+    // any non-loopback Origin; native clients (no Origin) are unaffected.
+    auto originIt = headers.find("origin");
+    if (originIt != headers.end() && !wsOriginAllowed(originIt->second)) {
+        std::string deny =
+            "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        writeAll(connFd, deny.data(), deny.size());
+        return false;
+    }
     std::string accept = wsAcceptHeader(it->second);
     std::string reply;
     reply += "HTTP/1.1 101 Switching Protocols\r\n";

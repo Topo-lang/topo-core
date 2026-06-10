@@ -1,10 +1,12 @@
 // POSIX HTTP/1.1 server for `topo debug serve`.
 //
 // Single-threaded accept loop. Each connection: read request, dispatch one
-// handler, write response, close. No keep-alive. No TLS. 127.0.0.1 binding
-// is enforced by the caller (HttpServer constructor takes `host`); we do not
-// validate it here, since users may legitimately bind to `0.0.0.0` for LAN
-// testing.
+// handler, write response, close. No keep-alive. No TLS. The bind host comes
+// from the caller (HttpServer constructor takes `host`); the default is the
+// 127.0.0.1 loopback. There is NO authentication, so binding a non-loopback
+// host exposes the debugger eval/render surface to the network — run() emits a
+// prominent warning in that case (see the bind path), and WebSocket upgrades
+// additionally require a loopback Origin (WebSocket.cpp wsOriginAllowed).
 
 #include "topo/Debug/Server/HttpServer.h"
 
@@ -311,6 +313,16 @@ int HttpServer::run(std::string& listeningAddr, std::function<void()> onListen) 
         return 1;
     }
     impl_->listenerFd = fd;
+
+    // No authentication exists on this server. A non-loopback bind exposes the
+    // eval/query and render endpoints to anyone who can reach the address; make
+    // that opt-in loud rather than silent (loopback is 127.0.0.0/8).
+    if (impl_->host.rfind("127.", 0) != 0) {
+        std::fprintf(stderr,
+            "topo-debug serve: WARNING bound non-loopback host '%s' with NO authentication —\n"
+            "  the eval/query and render endpoints are reachable by any host that can route here.\n",
+            impl_->host.c_str());
+    }
 
     // Self-pipe for prompt, signal-safe wakeup of the accept loop on stop. If
     // pipe creation fails we leave the fds at -1 and requestStop() falls back to
