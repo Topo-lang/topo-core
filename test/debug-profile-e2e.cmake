@@ -32,7 +32,16 @@ set(_TOPO_DEBUG_BIN "$<TARGET_FILE:topo-debug>")
 # `tiny_matrix.cpp` defines `int matrix[16][16]` and sets matrix[5][7]=42;
 # the breakpoint on the `int sentinel = 0;` line fires after that assignment
 # completes, so the adapter reads matrix == one-hot.
-if(TOPO_ENABLE_LLVM AND NOT WIN32 AND TARGET topo-debug-cpp)
+#
+# Also gated on TARGET tiny_matrix: the adapter target alone is not enough.
+# topo-lang-cpp builds topo-debug-cpp whenever lldb is findable, but the
+# tiny_* / project_* fixtures live behind TOPO_LANG_CPP_BUILD_TEST_FIXTURES
+# (off unless lang-cpp's LLVM-gated test surface builds), so in a default
+# (non-lang-LLVM) meta configure the $<TARGET_FILE:tiny_*> references below
+# would fail at generate time. All fixtures come from the same
+# topo-lang-cpp/topo-debug/test/CMakeLists.txt, so one representative
+# TARGET check covers the set.
+if(TOPO_ENABLE_LLVM AND NOT WIN32 AND TARGET topo-debug-cpp AND TARGET tiny_matrix)
     set(_TOPO_DEBUG_CPP "$<TARGET_FILE:topo-debug-cpp>")
     set(_TINY_MATRIX_FIXTURE "$<TARGET_FILE:tiny_matrix>")
     # Line 6 of tiny_matrix.cpp: `int sentinel = 0;`. Bumping the source
