@@ -17,11 +17,12 @@
 set(TOPO_CORE_FIXTURES_DIR "${PACKAGE_PREFIX_DIR}/share/topo-core/fixtures")
 set(TOPO_CORE_BUILD_FIXTURES_DIR "${PACKAGE_PREFIX_DIR}/share/topo-core/build-fixtures")
 #
-# Current export scope: TopoCoreTargets.cmake exports the targets whose PUBLIC
-# dependency closure stays inside topo-core (frontend + check + fmt). Targets
-# with cross-package PUBLIC deps (Build/Transpile/CheckRunner pulling
-# TopoLang) ship as artifacts but are not in the export set; a later revision
-# wires them in once topo-lang exposes a clean export surface.
+# Export scope: TopoCoreTargets.cmake carries the in-package-closure
+# targets (frontend / check / fmt / lsp / debug / profile) always;
+# TopoCoreLangTargets.cmake carries the topo-lang-linked targets
+# (TopoBuildLib / TopoTranspile) whenever the build had topo-lang in
+# scope. The staged load below keeps find_dependency(topo-lang)
+# consistent with what the Targets files reference.
 
 # TopoPlatform is a STATIC library whose Process.cpp.o carries unresolved
 # reproc::process::* symbols (PRIVATE link to reproc++). third_party/reproc
@@ -39,26 +40,38 @@ find_dependency(reproc   CONFIG PATHS "${PACKAGE_PREFIX_DIR}/share/reproc"   NO_
 # loads.
 find_dependency(nlohmann_json CONFIG)
 
-# TopoBuildLib and TopoTranspile PUBLIC-depend on topo::lang::TopoLang.
-# Whether this topo-core install includes those libs is decided at
-# topo-core configure time (gate flips when topo-lang is on the prefix
-# path); if the gate was ON, TopoCoreTargets.cmake references
-# topo::lang::TopoLang and we must find_dependency(topo-lang) before
-# loading it. The substitution below comes from the configure side:
-# CMakeLists.txt sets TOPO_CORE_WITH_LANG=ON when topo-lang_FOUND.
-set(TOPO_CORE_WITH_LANG @TOPO_CORE_WITH_LANG@)
-# Mark "topo-core is currently loading" so topo-langConfig — which
-# would normally find_dependency(topo-core) — can short-circuit. The
-# target-existence check alone is not enough: at this point in the
-# load we have not yet included TopoCoreTargets.cmake, so none of the
-# topo::core::* targets exist.
-set(_topo_core_loading TRUE)
-if(TOPO_CORE_WITH_LANG AND NOT _topo_lang_loading)
-    find_dependency(topo-lang CONFIG)
-endif()
-unset(_topo_core_loading)
-
+# Stage 1 — base export. Everything in TopoCoreTargets.cmake has its
+# PUBLIC closure inside topo-core (+ reproc / nlohmann_json found above),
+# so it loads with no topo-lang in sight. It MUST load first: topo-lang's
+# own Targets file references topo::core::{TopoCheck,TopoSema,
+# TopoLSPBridge}, so when stage 2 pulls topo-lang those targets have to
+# exist already.
 include("${CMAKE_CURRENT_LIST_DIR}/TopoCoreTargets.cmake")
+
+# Stage 2 — the topo-lang-linked targets (TopoBuildLib / TopoTranspile),
+# shipped as a separate TopoCoreLangTargets.cmake. The gate substitution
+# comes from the configure side: standalone, CMakeLists.txt sets
+# TOPO_CORE_WITH_LANG=ON when topo-lang_FOUND; in deferred (meta) mode,
+# lib-late/ regenerates this config with the gate ON after the lang-linked
+# targets join the export.
+#
+# Cycle protocol with topo-langConfig:
+#   - _topo_core_loading marks "inside topo-core's own load" so
+#     topo-langConfig skips its find_dependency(topo-core) — stage 1
+#     already defined the topo::core::* targets it needs.
+#   - _topo_lang_loading marks "inside topo-lang's load"; then we are the
+#     nested call, topo::lang::TopoLang does not exist yet, and stage 2
+#     must wait. A later explicit find_package(topo-core) re-runs this
+#     config (stage 1 early-returns) and completes stage 2 — consumers
+#     that only ever pull topo-core transitively via topo-lang never need
+#     the lang-linked targets.
+set(TOPO_CORE_WITH_LANG @TOPO_CORE_WITH_LANG@)
+if(TOPO_CORE_WITH_LANG AND NOT _topo_lang_loading)
+    set(_topo_core_loading TRUE)
+    find_dependency(topo-lang CONFIG)
+    unset(_topo_core_loading)
+    include("${CMAKE_CURRENT_LIST_DIR}/TopoCoreLangTargets.cmake")
+endif()
 
 set(_topo_core_known_components frontend check fmt transpile build lsp fixtures)
 

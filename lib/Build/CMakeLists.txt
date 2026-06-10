@@ -29,15 +29,15 @@ topo_set_compiler_flags(TopoBuildLib)
 topo_apply_std_pch(TopoBuildLib)
 # install component — topo-core-build.
 # TopoBuildConfig is INTERFACE (no artifact), TopoBuildLib is STATIC/SHARED.
-# These targets are intentionally NOT in the TopoCoreTargets export set:
-# TopoBuildLib PUBLIC-depends on TopoLang (owned by the topo-lang
-# package), which would require cross-package find_dependency() plumbing in
-# the package config. The artifact install still works; downstream
-# in-tree consumers continue using the raw target names. A later iteration may revisit
-# once a clean topo-lang export surface exists (the namespaced
-# target topo::core::build is therefore deferred).
+# Both join the TopoCoreLangTargets export set — NOT TopoCoreTargets —
+# because TopoBuildLib PUBLIC-depends on topo::lang::TopoLang while
+# topo-lang's own Targets file references topo::core::{Check,Sema,
+# LSPBridge} back. Keeping the lang-linked targets in a second export lets
+# the installed config load base targets → find_dependency(topo-lang) →
+# lang-linked targets, which is the only order that satisfies both sides
+# of the cycle (see topo-coreConfig.cmake.in).
 install(TARGETS TopoBuildConfig TopoBuildLib
-    EXPORT TopoCoreTargets
+    EXPORT TopoCoreLangTargets
     COMPONENT topo-core-build
     ARCHIVE DESTINATION lib/topo-core
     LIBRARY DESTINATION lib/topo-core

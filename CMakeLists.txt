@@ -223,6 +223,20 @@ install(EXPORT TopoCoreTargets
     COMPONENT topo-core-frontend
 )
 
+# The topo-lang-linked targets (TopoBuildLib / TopoTranspile) live in a
+# SECOND export set so the config can include base targets before pulling
+# topo-lang (whose Targets file references topo::core::* back). Installed
+# here only on the standalone gate-ON path; in deferred (meta) mode the
+# set is populated and installed by lib-late/ instead.
+if(TOPO_CORE_WITH_LANG)
+    install(EXPORT TopoCoreLangTargets
+        FILE TopoCoreLangTargets.cmake
+        NAMESPACE topo::core::
+        DESTINATION lib/cmake/topo-core
+        COMPONENT topo-core-frontend
+    )
+endif()
+
 configure_package_config_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/cmake/topo-coreConfig.cmake.in
     ${CMAKE_CURRENT_BINARY_DIR}/topo-coreConfig.cmake
