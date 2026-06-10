@@ -26,6 +26,21 @@
 set(_DBG_TEST_DIR "${CMAKE_CURRENT_LIST_DIR}")
 set(_TOPO_DEBUG_BIN "$<TARGET_FILE:topo-debug>")
 
+# Windows stance (the NOT WIN32 gates below): the platform subprocess layer
+# is NOT the blocker anymore — runProcess/runProcessCapture/PipedProcess use
+# a raw Win32 backend and resolve .cmd/.bat launchers, proven by topo-core's
+# windows-2022 CI lane. What keeps each real-adapter block gated is
+# per-adapter toolchain verification, to be lifted adapter by adapter:
+#   * cpp / rust — the adapters link liblldb; on Windows lldb ships via the
+#     MS/LLVM installer (different layout than the brew/apt dylib these
+#     blocks assume) and lldb-on-PE DAP behavior is unverified;
+#   * java — the JDWP attach + javac fixture pipeline is unverified on
+#     Windows runners (JAVA_HOME/launcher pathing differs);
+#   * python / typescript — debugpy / CDP adapters spawn fine now, but
+#     their path/URI handling for drive letters is unverified;
+#   * profile blocks — ride the same per-language fixtures.
+# The mock-adapter query e2e (no host toolchain) already runs on Windows.
+
 # topo-debug-cpp real lldb adapter (label: topo-debug-cpp).
 # Gated on TOPO_ENABLE_LLVM + non-Windows (lldb on Windows is shipped by
 # Microsoft separately; the bundled LLVM dylib path covers macOS/Linux only).
