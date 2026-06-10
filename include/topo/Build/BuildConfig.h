@@ -14,8 +14,10 @@
 namespace topo::build {
 
 /// Three-state setting for [build].check.
-/// Auto: no explicit preference; treated as off until the user opts in via CLI or TOML.
-/// On:   run topo-check as part of the build.
+/// Auto: no explicit preference — run topo-check when the build enables an
+///       optimization that consumes .topo declarations (the optimization
+///       license rests on *checked* declarations); otherwise skip it.
+/// On:   always run topo-check as part of the build.
 /// Off:  skip topo-check even if it would otherwise run.
 enum class CheckMode { Auto, On, Off };
 
@@ -119,11 +121,33 @@ struct BuildConfig {
     std::string rawObfuscation;
     std::string rawCheck;
 
-    /// Resolve whether topo-check should run given precedence: CLI > TOML > default.
-    /// CheckMode::Auto maps to "off" — the default preserves current behavior.
+    /// True when an enabled optimization consumes .topo declarations whose
+    /// incorrectness would make the optimization unsafe (parallelism →
+    /// concurrency, loop-parallelism, lifetime → memory). Optimizing on such
+    /// declarations is only licensed once they are checked, so CheckMode::Auto
+    /// turns checking ON in this case.
+    ///
+    /// parallel / loopParallel / lifetime default to Off, so any non-Off value
+    /// is a deliberate opt-in. pipeline defaults to Auto, so only an explicit
+    /// Force counts as the user enabling it (Auto pipeline is the no-op default
+    /// and must not, on its own, flip every build into checked mode).
+    bool consumesDeclarationsForOptimization() const {
+        return parallelCfg.mode != FeatureMode::Off
+            || loopParallelCfg.mode != FeatureMode::Off
+            || lifetimeCfg.mode != FeatureMode::Off
+            || pipelineCfg.mode == FeatureMode::Force;
+    }
+
+    /// Resolve whether topo-check should run. Precedence: CLI (--check /
+    /// --no-check) > [build].check On/Off > Auto. Under Auto, check runs exactly
+    /// when a declaration-consuming optimization is enabled — so plain builds
+    /// stay fast while optimized builds validate the declarations the passes
+    /// rely on.
     bool shouldRunCheck() const {
         if (checkCliOverride.has_value()) return *checkCliOverride;
-        return checkMode == CheckMode::On;
+        if (checkMode == CheckMode::On) return true;
+        if (checkMode == CheckMode::Off) return false;
+        return consumesDeclarationsForOptimization();
     }
 
     // Mixed C++/Rust project configuration (only used when language == Mixed)
