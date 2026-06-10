@@ -164,7 +164,8 @@ if(TOPO_CORE_BUILD_TESTS AND (PROJECT_IS_TOP_LEVEL OR TOPO_META_DRIVING_TESTS))
     if(NOT TARGET GTest::gtest_main)
         include(FetchContent)
         FetchContent_Declare(googletest
-            URL https://github.com/google/googletest/archive/refs/tags/v1.15.2.tar.gz)
+            URL https://github.com/google/googletest/archive/refs/tags/v1.15.2.tar.gz
+            DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
         set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
         FetchContent_MakeAvailable(googletest)
     endif()
