@@ -1,0 +1,9 @@
+// Declares only `add` — the host Calculator also ships a public `subtract`,
+// which the completeness check must flag as an undeclared symbol (Error).
+namespace app {
+  public:
+    type Calculator {
+      public:
+        i64 add(i64 a, i64 b);
+    }
+}

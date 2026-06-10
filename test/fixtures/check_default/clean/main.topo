@@ -1,0 +1,9 @@
+// Fully aligned with the host Calculator — check passes on every build.
+namespace app {
+  public:
+    type Calculator {
+      public:
+        i64 add(i64 a, i64 b);
+        i64 multiply(i64 a, i64 b);
+    }
+}

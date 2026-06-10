@@ -1,0 +1,15 @@
+# check-on-by-default e2e fixture (clean): declarations and host code agree,
+# so every `topo-build` passes its default topo-check stage. A second
+# no-change build must hit the incremental check cache (.topo-check-cache)
+# — the e2e asserts the "cache hit" marker in the build output.
+[project]
+name = "check_default_clean"
+
+[topo]
+root = "main.topo"
+
+[build]
+language = "java"
+sources = ["src/main/java"]
+output = "main.jar"
+output_type = "exe"
