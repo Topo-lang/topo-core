@@ -205,6 +205,11 @@ std::string IncrementalCache::computeConfigFingerprint(const BuildConfig& cfg) {
             oss << "src:" << fs::path(src).generic_string() << "\n";
     }
 
+    // Extra clang++ flags (order-preserving — flag order is semantic, so no
+    // sort; a reorder must invalidate the fingerprint like a value change)
+    for (const auto& flag : cfg.cppFlags)
+        oss << "cppflag:" << flag << "\n";
+
     oss << "embedIR:" << cfg.embedIR << "\n";
     oss << "adaptive:" << cfg.adaptiveCfg.isEnabled() << "\n";
     oss << "outputType:" << static_cast<int>(cfg.outputType) << "\n";

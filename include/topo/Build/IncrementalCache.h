@@ -68,8 +68,9 @@ public:
     // --- Config fingerprint ---
 
     /// Compute a fingerprint of compile-affecting config fields.
-    /// Includes: hostCompilerPath, standard, includeDirs, sources, embedIR,
-    /// adaptiveCfg.isEnabled(), outputType. Excludes optLevel (only affects Step 6).
+    /// Includes: hostCompilerPath, standard, includeDirs, sources, cppFlags
+    /// (order-preserving), embedIR, adaptiveCfg.isEnabled(), outputType.
+    /// Excludes optLevel (only affects Step 6).
     static std::string computeConfigFingerprint(const BuildConfig& cfg);
 
     /// Remove all cache contents.

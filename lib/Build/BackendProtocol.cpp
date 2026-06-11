@@ -512,6 +512,7 @@ const std::unordered_set<std::string>& knownBackendExtrasKeys(HostLanguage langu
     static const std::unordered_set<std::string> kLlvmCppKeys = {
         "hostCompilerPath",
         "standard",
+        "cppFlags",
     };
     static const std::unordered_set<std::string> kLlvmRustKeys = {
         "hostCompilerPath",
