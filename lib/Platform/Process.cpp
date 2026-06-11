@@ -919,14 +919,29 @@ void PipedProcess::stop(int timeoutMs) {
     // holds the impl.
     impl->started = false;
 #else
-    // wait → terminate → kill. Matches the previous SIGTERM/TerminateProcess
-    // + blocking waitpid behavior.
-    auto [status, ec] = impl->process.stop(
-        {{reproc::stop::wait, reproc::milliseconds(timeoutMs)},
-         {reproc::stop::terminate, reproc::milliseconds(timeoutMs)},
-         {reproc::stop::kill, reproc::milliseconds(5000)}});
-
-    exitStatus_ = ec ? -1 : status;
+    // Grace wait, then escalation — split (instead of one combined
+    // wait/terminate/kill stop()) because reproc encodes signal deaths as
+    // 128+signo and the combined call cannot attribute which stage ended
+    // the child. Splitting makes "we initiated the kill" structurally
+    // known, mirroring the Win32 branch above. Negative timeouts clamp to
+    // an immediate poll, matching the Win32 clamp.
+    const auto graceMs =
+        reproc::milliseconds(timeoutMs < 0 ? 0 : timeoutMs);
+    auto [status, ec] = impl->process.wait(graceMs);
+    if (!ec) {
+        // Child exited on its own within the grace window — report its own
+        // exit code (a genuine nonzero exit stays as-is).
+        exitStatus_ = status;
+    } else {
+        // Timeout (or wait failure): SIGTERM → SIGKILL. Force-killed
+        // children report -1, per the exitCode() contract in the header;
+        // reproc's 128+signo status for the kill is deliberately discarded.
+        impl->process.stop(
+            {{reproc::stop::terminate, graceMs},
+             {reproc::stop::kill, reproc::milliseconds(5000)},
+             {reproc::stop::noop, reproc::milliseconds(0)}});
+        exitStatus_ = -1;
+    }
     impl->started = false;
 #endif // _WIN32
 }
