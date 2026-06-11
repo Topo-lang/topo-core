@@ -5,6 +5,17 @@ if(WIN32)
     return()
 endif()
 
+# Self-gating: every cpp fixture build dispatches to the topo-build-llvm-cpp
+# backend tool, so the suite needs both the CLI and the backend tool as live
+# targets (TOPO_ENABLE_LLVM alone is the wrong gate — a tools-off LLVM scope
+# has the option ON but no backend binary). Consumers add this directory
+# unconditionally; it registers nothing when the targets are absent.
+if(NOT TARGET topo-build OR NOT TARGET topo-build-llvm-cpp)
+    message(STATUS "topo-core tests: shell e2e suite skipped "
+        "(needs topo-build + topo-build-llvm-cpp targets).")
+    return()
+endif()
+
 set(SHELL_TEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # Run the build fixtures from a build-tree COPY, never the in-source tree.
@@ -16,11 +27,13 @@ set(SHELL_TEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 set(E2E_FIXTURES_RUN_DIR "${CMAKE_CURRENT_BINARY_DIR}/run-fixtures")
 file(COPY "${TOPO_CORE_BUILD_FIXTURES_DIR}/" DESTINATION "${E2E_FIXTURES_RUN_DIR}")
 
+# TOPO_BACKEND_TOOL_DIR: topo-build resolves backend tools via its exe dir,
+# then PATH; the scripts prepend this dir so dispatch hits the build-tree
+# topo-build-llvm-cpp instead of whatever (if anything) is installed.
 set(SHELL_TEST_ENV
     "TOPO_BUILD_EXE=$<TARGET_FILE:topo-build>"
     "TOPO_FIXTURES_DIR=${E2E_FIXTURES_RUN_DIR}"
-    "TOPO_PROJECT_ROOT=${PROJECT_SOURCE_DIR}"
-    "TOPO_LLVM_BINDIR=${TOPO_LLVM_BINDIR}"
+    "TOPO_BACKEND_TOOL_DIR=$<TARGET_FILE_DIR:topo-build-llvm-cpp>"
 )
 
 add_test(NAME e2e.shell.basic_build

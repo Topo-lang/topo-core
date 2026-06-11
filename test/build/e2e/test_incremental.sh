@@ -6,14 +6,19 @@ FIXTURES_DIR="${TOPO_FIXTURES_DIR:?TOPO_FIXTURES_DIR not set}"
 PROJECT_DIR="$FIXTURES_DIR/incremental"
 CACHE_DIR="$PROJECT_DIR/.topo-cache"
 
+# topo-build resolves backend tools (topo-build-llvm-cpp) via PATH.
+PATH="${TOPO_BACKEND_TOOL_DIR:?TOPO_BACKEND_TOOL_DIR not set}:$PATH"
+export PATH
+
 cd "$PROJECT_DIR"
 
 # Clean
 rm -rf "$CACHE_DIR"
 
-# First build
+# First build. Always --no-check: this suite verifies the incremental
+# cache, not declaration conformance — the checker has its own suites.
 echo "First build (clean)..."
-"${TOPO_BUILD_EXE:?TOPO_BUILD_EXE not set}"
+"${TOPO_BUILD_EXE:?TOPO_BUILD_EXE not set}" --no-check
 if [ $? -ne 0 ]; then
     echo "FAIL: first build failed"
     exit 1
@@ -31,7 +36,7 @@ fi
 
 # Second build (should use cache)
 echo "Second build (cached)..."
-"$TOPO_BUILD_EXE"
+"$TOPO_BUILD_EXE" --no-check
 if [ $? -ne 0 ]; then
     echo "FAIL: cached build failed"
     exit 1

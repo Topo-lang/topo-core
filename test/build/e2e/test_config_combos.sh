@@ -6,6 +6,10 @@ set -e
 FIXTURES_DIR="${TOPO_FIXTURES_DIR:?TOPO_FIXTURES_DIR not set}"
 TOPO_BUILD="${TOPO_BUILD_EXE:?TOPO_BUILD_EXE not set}"
 
+# topo-build resolves backend tools (topo-build-llvm-cpp) via PATH.
+PATH="${TOPO_BACKEND_TOOL_DIR:?TOPO_BACKEND_TOOL_DIR not set}:$PATH"
+export PATH
+
 run_fixture() {
     local name="$1"
     local expected="$2"
@@ -19,9 +23,13 @@ run_fixture() {
     # Clean cache
     rm -rf "$dir/.topo-cache"
 
+    # Always --no-check: this suite verifies optimization-combo plumbing,
+    # not declaration conformance — the checker has its own suites. The
+    # --no-check + enabled-optimization UNVERIFIED warning on stderr is
+    # expected noise here, asserted nowhere.
     echo "  Building $name..."
     cd "$dir"
-    if ! "$TOPO_BUILD" 2>&1; then
+    if ! "$TOPO_BUILD" --no-check 2>&1; then
         echo "FAIL: topo-build failed for $name"
         exit 1
     fi

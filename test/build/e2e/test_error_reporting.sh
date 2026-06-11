@@ -6,6 +6,10 @@ set -e
 FIXTURES_DIR="${TOPO_FIXTURES_DIR:?TOPO_FIXTURES_DIR not set}"
 TOPO_BUILD="${TOPO_BUILD_EXE:?TOPO_BUILD_EXE not set}"
 
+# topo-build resolves backend tools (topo-build-llvm-cpp) via PATH.
+PATH="${TOPO_BACKEND_TOOL_DIR:?TOPO_BACKEND_TOOL_DIR not set}:$PATH"
+export PATH
+
 # Helper: expect build failure and verify stderr contains a pattern.
 expect_error() {
     local name="$1"
@@ -23,7 +27,10 @@ expect_error() {
     local stderr_file
     stderr_file=$(mktemp)
 
-    if "$TOPO_BUILD" 2>"$stderr_file"; then
+    # Always --no-check: without it, a check-stage failure (or a missing
+    # topo-check tool) also matches the generic 'error' pattern and masks
+    # what this suite asserts — diagnostics from the intended build stage.
+    if "$TOPO_BUILD" --no-check 2>"$stderr_file"; then
         rm -f "$stderr_file"
         echo "FAIL: $name: topo-build should have failed"
         exit 1
