@@ -1,0 +1,15 @@
+// Multiple reference parameters in one list are legal — the Parameter BNF
+// repeats [const] Type [&|*] Identifier without restriction. (Pins the
+// disproven hypothesis that a second reference parameter breaks parsing;
+// the actual trap is a keyword-named parameter, see
+// stdlib/invalid/keyword_as_param_name.topo.)
+
+namespace app {
+  public:
+    type Record {
+      public:
+        bool valid() const;
+    }
+    bool matches(const Record& a);
+    bool cmp(const Record& a, const Record& b);
+}

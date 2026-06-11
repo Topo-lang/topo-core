@@ -1,0 +1,14 @@
+// TEST: stdlib type keyword used as a parameter NAME.
+// 'record' is one of the unconditional stdlib bridging keywords (lexed as
+// a keyword before any context applies), so it can never satisfy the
+// Identifier slot of Parameter ::= [const] Type [&|*] Identifier.
+// EXPECT-ERROR: expected parameter name
+
+namespace bad {
+  public:
+    type Record {
+      public:
+        bool valid() const;
+    }
+    bool accepts(const Record& record);
+}
