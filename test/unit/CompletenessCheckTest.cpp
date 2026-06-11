@@ -598,3 +598,104 @@ TEST(CompletenessCheck, VisibilityMismatch_Reports) {
     EXPECT_TRUE(sawProtected);
     EXPECT_TRUE(sawPrivate);
 }
+
+// =============================================================================
+// Constructor matching. Sema stores declared constructors arity-keyed
+// ("shop::Cart::Cart/1") while host extractors report language-specific
+// simple names ("Cart", "__init__", "constructor") — pure name equality can
+// never hold across that pair, so a host Constructor matches kind-based:
+// any declared ctor of the resolved class satisfies it.
+// =============================================================================
+
+namespace {
+
+// Helper: a host constructor symbol of `enclosing` with the given simple name.
+HostSymbol makeHostCtor(const std::string& qualified,
+                        const std::string& simple,
+                        const std::string& enclosing) {
+    HostSymbol hs;
+    hs.qualifiedName = qualified;
+    hs.simpleName = simple;
+    hs.kind = HostSymbolKind::Constructor;
+    hs.enclosingClass = enclosing;
+    hs.file = "test.cpp";
+    hs.line = 3;
+    return hs;
+}
+
+// Helper: a declared class with one arity-keyed constructor.
+SymbolTable makeClassWithCtor() {
+    SymbolTable symbols;
+    ClassSymbol cls;
+    cls.qualifiedName = "shop::Cart";
+    cls.simpleName = "Cart";
+    cls.visibility = Visibility::Public;
+    cls.constructors = {"shop::Cart::Cart/1"};
+    symbols.addClassSymbol(cls);
+    return symbols;
+}
+
+} // namespace
+
+// A C++-style host ctor (simpleName == class name) must satisfy the declared
+// arity-keyed constructor.
+TEST(CompletenessCheck, DeclaredCtorSatisfiesCppHostConstructor) {
+    std::vector<HostSymbol> hostSymbols = {
+        makeHostCtor("shop::Cart::Cart", "Cart", "shop::Cart"),
+    };
+
+    SymbolTable symbols = makeClassWithCtor();
+    std::vector<VisibilityEntry> visEntries;
+
+    CompletenessConfig config;
+    CheckResult result;
+    checkCompleteness(hostSymbols, symbols, visEntries, config, result);
+
+    EXPECT_TRUE(result.passed());
+    EXPECT_EQ(result.errorCount, 0);
+}
+
+// Python ("__init__") and TypeScript ("constructor") host ctors carry simple
+// names unrelated to the class name; the kind-based match must cover them.
+TEST(CompletenessCheck, DeclaredCtorSatisfiesPythonAndTsHostConstructors) {
+    std::vector<HostSymbol> hostSymbols = {
+        makeHostCtor("Cart.__init__", "__init__", "Cart"),
+        makeHostCtor("Cart.constructor", "constructor", "Cart"),
+    };
+
+    SymbolTable symbols = makeClassWithCtor();
+    std::vector<VisibilityEntry> visEntries;
+
+    CompletenessConfig config;
+    CheckResult result;
+    checkCompleteness(hostSymbols, symbols, visEntries, config, result);
+
+    EXPECT_TRUE(result.passed());
+    EXPECT_EQ(result.errorCount, 0);
+}
+
+// Guard against over-matching: a host constructor of a class that declares
+// NO constructor in .topo must still be reported undeclared.
+TEST(CompletenessCheck, HostConstructorWithoutDeclaredCtorStillErrors) {
+    std::vector<HostSymbol> hostSymbols = {
+        makeHostCtor("shop::Cart::Cart", "Cart", "shop::Cart"),
+    };
+
+    SymbolTable symbols;
+    ClassSymbol cls;
+    cls.qualifiedName = "shop::Cart";
+    cls.simpleName = "Cart";
+    cls.visibility = Visibility::Public;
+    symbols.addClassSymbol(cls); // no constructors declared
+
+    std::vector<VisibilityEntry> visEntries;
+
+    CompletenessConfig config;
+    CheckResult result;
+    checkCompleteness(hostSymbols, symbols, visEntries, config, result);
+
+    EXPECT_FALSE(result.passed());
+    EXPECT_EQ(result.errorCount, 1);
+    EXPECT_NE(result.diagnostics[0].message.find("shop::Cart::Cart"),
+              std::string::npos);
+}
