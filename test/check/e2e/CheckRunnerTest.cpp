@@ -121,6 +121,52 @@ TEST(CheckRunner, MissingTopoToml) {
     EXPECT_FALSE(runner.loadConfig());
 }
 
+// --- Mixed C++/Rust projects ---
+
+// PASS is only reachable when both halves contribute symbols: the .topo
+// declares cppCompute + rustCompute with one implemented per half, so
+// either single-language provider alone fails completeness — the pass
+// itself proves the cpp+rust provider composition.
+TEST(CheckRunner, MixedProjectPassesWithBothHalves) {
+    FixtureCopy fixture("mixed/pass_two_halves");
+    CheckConfig cfg;
+    cfg.projectDir = fixture.path();
+    cfg.checkName = "all";
+    CheckRunner runner(cfg);
+    ASSERT_TRUE(runner.loadConfig());
+    EXPECT_EQ(runner.run(), 0);
+}
+
+// A violation in each half must surface with per-half file attribution:
+// the containment errors name both the .cpp and the .rs source, proving
+// neither half's extractor is silently dropped.
+TEST(CheckRunner, MixedProjectViolationInEachHalf) {
+    FixtureCopy fixture("mixed/violation_each_half");
+    CheckConfig cfg;
+    cfg.projectDir = fixture.path();
+    cfg.checkName = "containment";
+    CheckRunner runner(cfg);
+    ASSERT_TRUE(runner.loadConfig());
+    EXPECT_EQ(runner.run(), 1);
+
+    auto endsWith = [](const std::string& s, const std::string& suffix) {
+        return s.size() >= suffix.size() &&
+               s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
+    };
+    bool sawCppError = false;
+    bool sawRustError = false;
+    for (const auto& [name, result] : runner.lastResults()) {
+        if (name != "containment") continue;
+        for (const auto& diag : result.diagnostics) {
+            if (diag.severity != check::Severity::Error) continue;
+            if (endsWith(diag.file, ".cpp")) sawCppError = true;
+            if (endsWith(diag.file, ".rs")) sawRustError = true;
+        }
+    }
+    EXPECT_TRUE(sawCppError) << "no containment error attributed to a .cpp file";
+    EXPECT_TRUE(sawRustError) << "no containment error attributed to a .rs file";
+}
+
 // --- Jobs parallelism: determinism + benchmark ---
 
 namespace {
