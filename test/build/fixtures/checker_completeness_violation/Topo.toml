@@ -1,0 +1,11 @@
+[project]
+name = "checker_completeness_violation"
+
+[topo]
+root = "topo/main.topo"
+
+[build]
+sources = ["src/engine.cpp", "src/main.cpp"]
+include = ["include"]
+standard = "c++17"
+output = "checker_completeness_violation"

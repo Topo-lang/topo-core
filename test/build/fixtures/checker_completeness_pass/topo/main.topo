@@ -1,0 +1,16 @@
+// Checker E2E: all declarations match host code
+using int = std::cpp17::int;
+
+namespace engine {
+
+  public:
+    void initialize();
+    void run(const int iterations);
+    int get_result();
+
+  protected:
+    void load_config();
+
+  private:
+    void reset_state();
+}

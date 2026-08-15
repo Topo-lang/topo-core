@@ -1,0 +1,13 @@
+// Checker E2E: missing function → completeness violation
+using int = std::cpp17::int;
+
+namespace engine {
+
+  public:
+    void initialize();
+    void run(const int iterations);
+    void missing_function();
+
+  private:
+    void reset_state();
+}
