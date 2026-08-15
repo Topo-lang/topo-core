@@ -108,7 +108,10 @@ std::vector<std::string> globExpand(const fs::path& baseDir, const std::string& 
         // typescript drivers that recurse internally).
         fs::path full = baseDir / pattern;
         std::error_code ec;
-        if (fs::exists(full, ec)) return {full.string()};
+        // make_preferred(): a pattern written with '/' would otherwise come
+        // back with mixed separators on Windows (baseDir's native '\' plus
+        // the pattern's '/'), breaking string-level consumers.
+        if (fs::exists(full, ec)) return {full.make_preferred().string()};
         return {};
     }
 
