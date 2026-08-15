@@ -1,0 +1,11 @@
+// TEST: one illegal top-level construct (a bare visibility section at top
+// level) must yield a bounded diagnostic set — the first error plus a
+// resync — not a wall of ~100 identical 'expected top-level declaration'
+// errors at the same file:line:col. Visibility keywords are not valid
+// top-level starts, and the top-level recovery path must consume the
+// offending token before re-reporting.
+// EXPECT-ERROR: expected top-level declaration
+// EXPECT-COUNT: expected top-level declaration, 1, 3
+
+public:
+  value: i64 = 42;

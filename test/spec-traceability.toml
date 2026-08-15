@@ -48,7 +48,7 @@
 
 # 07 General syntax errors
 "07.err_illegal_character"     = ["spec/syntax/invalid/illegal_character.topo"]
-"07.err_unexpected_token"      = ["spec/syntax/invalid/unexpected_token.topo"]
+"07.err_unexpected_token"      = ["spec/syntax/invalid/unexpected_token.topo", "spec/syntax/recovery/top_level_illegal_visibility.topo"]
 "07.err_missing_rparen"        = ["spec/syntax/invalid/missing_rparen.topo"]
 "07.err_empty_namespace"       = ["spec/syntax/invalid/empty_namespace.topo"]
 "07.err_unclosed_namespace"    = ["spec/syntax/invalid/unclosed_namespace.topo"]
