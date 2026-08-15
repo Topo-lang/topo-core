@@ -366,9 +366,17 @@ std::unique_ptr<TopoFile> Parser::parseTopoFile() {
     auto file = std::make_unique<TopoFile>(current_.location);
 
     while (!check(TokenKind::Eof) && !diag_.reachedLimit()) {
+        auto loopLoc = current_.location;
         auto decl = parseTopLevelDecl();
         if (decl) {
             file->declarations.push_back(std::move(decl));
+        }
+        // Stall detection: if token position hasn't advanced, force progress.
+        // Without this, a recovery path that reports an error without
+        // consuming a token would re-report the same diagnostic until the
+        // engine's 100-error cap (a wall of identical errors at one position).
+        if (current_.location == loopLoc) {
+            advance();
         }
     }
 
@@ -409,6 +417,12 @@ ASTNodePtr Parser::parseTopLevelDecl() {
     }
 
     diag_.error(current_.location, "expected top-level declaration (import, using, namespace, or debug)");
+    // Consume the offending token before resynchronizing: tokens that are
+    // valid declaration starts in nested contexts (visibility keywords,
+    // `fn`, ...) are NOT valid top-level starts, and synchronize() stops at
+    // them without advancing. Consuming first guarantees one diagnostic per
+    // offending token instead of ~100 repeats at the same position.
+    advance();
     synchronize();
     return nullptr;
 }

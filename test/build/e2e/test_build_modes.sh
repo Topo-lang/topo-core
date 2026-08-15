@@ -6,13 +6,20 @@ set -e
 FIXTURES_DIR="${TOPO_FIXTURES_DIR:?TOPO_FIXTURES_DIR not set}"
 TOPO_BUILD="${TOPO_BUILD_EXE:?TOPO_BUILD_EXE not set}"
 
+# topo-build resolves backend tools (topo-build-llvm-cpp) via PATH.
+PATH="${TOPO_BACKEND_TOOL_DIR:?TOPO_BACKEND_TOOL_DIR not set}:$PATH"
+export PATH
+
+# Always --no-check: this suite verifies output_type artifacts, not
+# declaration conformance — the checker has its own suites.
+
 # Test 1: shared library build
 echo "Test 1: shared library..."
 SHARED_DIR="$FIXTURES_DIR/shared_lib"
 rm -rf "$SHARED_DIR/.topo-cache"
 cd "$SHARED_DIR"
 
-if ! "$TOPO_BUILD" 2>&1; then
+if ! "$TOPO_BUILD" --no-check 2>&1; then
     echo "FAIL: shared library build failed"
     exit 1
 fi
@@ -44,7 +51,7 @@ STATIC_DIR="$FIXTURES_DIR/static_lib"
 rm -rf "$STATIC_DIR/.topo-cache"
 cd "$STATIC_DIR"
 
-if ! "$TOPO_BUILD" 2>&1; then
+if ! "$TOPO_BUILD" --no-check 2>&1; then
     echo "FAIL: static library build failed"
     exit 1
 fi

@@ -155,11 +155,11 @@ TEST(PipedProcess, IsRunningReapsExitStatus) {
 }
 
 // stop() must terminate a child that never exits on its own, within the
-// escalation bounds (wait → terminate/kill) — i.e. return promptly instead
-// of hanging, and leave the process reported as not running. Force-killed
-// children report exitCode() == -1 per the header contract; the assertion
-// stays at "not 0" because the POSIX backend derives the code from the
-// termination signal.
+// escalation bounds (grace wait → terminate/kill) — i.e. return promptly
+// instead of hanging, and leave the process reported as not running.
+// Force-killed children report exitCode() == -1 on every platform: the
+// POSIX backend discards reproc's 128+signo encoding once it escalates,
+// matching the Win32 TerminateProcess branch.
 TEST(PipedProcess, StopTerminatesUnresponsiveChild) {
     PipedProcess proc;
     ASSERT_TRUE(proc.start(helperPath(), {"sleep", "30000"}));
@@ -170,9 +170,25 @@ TEST(PipedProcess, StopTerminatesUnresponsiveChild) {
     const auto elapsed = std::chrono::steady_clock::now() - before;
 
     EXPECT_FALSE(proc.isRunning());
-    EXPECT_NE(proc.exitCode(), 0);
+    EXPECT_EQ(proc.exitCode(), -1);
     // Generous bound: 200ms wait + termination grace, not the 30s sleep.
     EXPECT_LT(elapsed, std::chrono::seconds(15));
+}
+
+// The -1 normalization applies only to stop()-initiated kills: a child that
+// exits on its own with a nonzero code inside stop()'s grace window must
+// report that code, not -1. Guards the grace-wait branch against
+// over-normalization.
+TEST(PipedProcess, StopGraceWaitReportsChildOwnExitCode) {
+    PipedProcess proc;
+    ASSERT_TRUE(proc.start(helperPath(), {"exit", "7"}));
+
+    // The child exits immediately; stop()'s grace wait observes it well
+    // within the window — no escalation, no normalization.
+    proc.stop(/*timeoutMs=*/5000);
+
+    EXPECT_FALSE(proc.isRunning());
+    EXPECT_EQ(proc.exitCode(), 7);
 }
 
 // A stop()ed PipedProcess must be start()able again with a fresh child —

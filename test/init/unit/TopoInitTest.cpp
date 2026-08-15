@@ -74,12 +74,55 @@ TEST(TopoGeneratorTest, ClassWithMembers) {
     ASSERT_FALSE(result.topoFiles.empty());
     const auto& content = result.topoFiles[0].content;
 
-    EXPECT_NE(content.find("class Widget {"), std::string::npos);
+    // `class` is deprecated in the grammar — the generator must emit `type`,
+    // placed inside the namespace's visibility section (a namespace body is
+    // strictly visibility sections).
+    EXPECT_NE(content.find("type Widget {"), std::string::npos);
+    EXPECT_EQ(content.find("class Widget"), std::string::npos);
     EXPECT_NE(content.find("Widget();"), std::string::npos);
     EXPECT_NE(content.find("~Widget();"), std::string::npos);
     EXPECT_NE(content.find("void render();"), std::string::npos);
     EXPECT_NE(content.find("public:"), std::string::npos);
     EXPECT_NE(content.find("private:"), std::string::npos);
+}
+
+// Constructors are named after their type in the grammar; host extractors
+// surface language-specific spellings (__init__, constructor) that must not
+// leak into the declaration.
+TEST(TopoGeneratorTest, ConstructorRenderedAsClassName) {
+    std::vector<HostSymbol> syms = {
+        makeSymbol("Cart", "Cart", HostSymbolKind::Class, Visibility::Public),
+        makeSymbol("Cart.__init__", "__init__", HostSymbolKind::Constructor,
+                   Visibility::Public, "Cart"),
+    };
+
+    TopoGenerator gen(HostLanguage::Python, "myproject");
+    auto result = gen.generate(syms, "src");
+
+    ASSERT_FALSE(result.topoFiles.empty());
+    const auto& content = result.topoFiles[0].content;
+
+    EXPECT_NE(content.find("Cart();"), std::string::npos);
+    EXPECT_EQ(content.find("__init__"), std::string::npos);
+}
+
+// The grammar requires Parameter ::= Type Identifier while host extractors
+// supply types only — the generator synthesizes argN names.
+TEST(TopoGeneratorTest, ParamsGetSynthesizedNames) {
+    auto fn = makeSymbol("app::compute", "compute", HostSymbolKind::Function,
+                         Visibility::Public);
+    fn.returnType = "int";
+    fn.paramTypes = {"int", "double"};
+    std::vector<HostSymbol> syms = {fn};
+
+    TopoGenerator gen(HostLanguage::Cpp, "myproject");
+    auto result = gen.generate(syms, "src/*.cpp");
+
+    ASSERT_FALSE(result.topoFiles.empty());
+    const auto& content = result.topoFiles[0].content;
+
+    EXPECT_NE(content.find("int compute(int arg0, double arg1);"),
+              std::string::npos);
 }
 
 TEST(TopoGeneratorTest, MixedNamespaces) {
@@ -244,6 +287,9 @@ TEST(TopoGeneratorTest, TopoTomlGeneration) {
     EXPECT_NE(toml.find("root = \"topo/main.topo\""), std::string::npos);
     EXPECT_NE(toml.find("language = \"cpp\""), std::string::npos);
     EXPECT_NE(toml.find("sources = [\"src/**/*.cpp\"]"), std::string::npos);
+    // [build].output is required by topo-build; scaffolds without it fail
+    // at "-o <output> is required" before any check runs.
+    EXPECT_NE(toml.find("output = \"myproject\""), std::string::npos);
     EXPECT_NE(toml.find("ignore_main = true"), std::string::npos);
 }
 
@@ -281,26 +327,27 @@ TEST(TopoGeneratorTest, StructUsesTypeKeyword) {
     ASSERT_FALSE(result.topoFiles.empty());
     const auto& content = result.topoFiles[0].content;
 
-    EXPECT_NE(content.find("type"), std::string::npos);
-    // Struct should use "type" keyword, not "class"
-    // Only check that "class Point" does not appear (class keyword for this symbol)
+    EXPECT_NE(content.find("type Point {"), std::string::npos);
+    // Struct must use the "type" keyword — "class" is deprecated.
     EXPECT_EQ(content.find("class Point"), std::string::npos);
 }
 
-TEST(TopoGeneratorTest, NoNamespaceSymbols) {
+TEST(TopoGeneratorTest, NoNamespaceSymbolsWrappedInProjectNamespace) {
     std::vector<HostSymbol> syms = {
         makeSymbol("main", "main", HostSymbolKind::Function, Visibility::Public),
     };
 
-    TopoGenerator gen(HostLanguage::Cpp, "myproject");
+    TopoGenerator gen(HostLanguage::Cpp, "my-project");
     auto result = gen.generate(syms, "src/**/*.cpp");
 
     ASSERT_FALSE(result.topoFiles.empty());
     const auto& content = result.topoFiles[0].content;
 
-    // Should not be inside a namespace block
-    EXPECT_EQ(content.find("namespace"), std::string::npos);
-    // Visibility section at indent 0
+    // The TopoFile grammar allows only imports / data declarations /
+    // namespace blocks at the top level — empty-namespace symbols are
+    // wrapped in a namespace derived from the sanitized project name
+    // ('-' maps to '_', matching cargo's crate-name convention).
+    EXPECT_NE(content.find("namespace my_project {"), std::string::npos);
     EXPECT_NE(content.find("public:"), std::string::npos);
     EXPECT_NE(content.find("void main();"), std::string::npos);
 }

@@ -1,0 +1,17 @@
+[project]
+name = "mixed_violation_each_half"
+
+[topo]
+root = "topo/main.topo"
+
+[build]
+language = "mixed"
+
+[build.cpp]
+sources = ["src/*.cpp"]
+
+[build.rust]
+manifest = "rust_lib/Cargo.toml"
+
+[containment]
+mode = "force"

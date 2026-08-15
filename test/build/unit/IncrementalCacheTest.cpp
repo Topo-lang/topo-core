@@ -94,6 +94,24 @@ TEST_F(IncrementalCacheTest, FingerprintSourceOrderIndependent) {
     EXPECT_EQ(IncrementalCache::computeConfigFingerprint(cfg1), IncrementalCache::computeConfigFingerprint(cfg2));
 }
 
+TEST_F(IncrementalCacheTest, FingerprintChangesWithCppFlags) {
+    BuildConfig cfg1;
+    cfg1.hostCompilerPath = "clang++";
+    cfg1.sources = {"src/main.cpp"};
+    cfg1.cppFlags = {"-DNEED_FLAG"};
+
+    BuildConfig cfg2 = cfg1;
+    cfg2.cppFlags = {"-DNEED_FLAG", "-fno-omit-frame-pointer"};
+
+    EXPECT_NE(IncrementalCache::computeConfigFingerprint(cfg1), IncrementalCache::computeConfigFingerprint(cfg2));
+
+    // Flag order is semantic for clang (last flag wins), so a reorder must
+    // also invalidate the fingerprint — flags hash order-preserving.
+    BuildConfig cfg3 = cfg2;
+    cfg3.cppFlags = {"-fno-omit-frame-pointer", "-DNEED_FLAG"};
+    EXPECT_NE(IncrementalCache::computeConfigFingerprint(cfg2), IncrementalCache::computeConfigFingerprint(cfg3));
+}
+
 TEST_F(IncrementalCacheTest, FingerprintIgnoresOptLevel) {
     BuildConfig cfg1;
     cfg1.hostCompilerPath = "clang++";

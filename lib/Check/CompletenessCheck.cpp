@@ -1,5 +1,6 @@
 #include "topo/Check/CompletenessCheck.h"
 
+#include <cctype>
 #include <regex>
 #include <unordered_map>
 #include <unordered_set>
@@ -46,6 +47,19 @@ std::string extractSimpleName(const std::string& qualifiedName) {
     auto pos = qualifiedName.rfind("::");
     if (pos != std::string::npos) return qualifiedName.substr(pos + 2);
     return qualifiedName;
+}
+
+/// Strip the arity suffix from a declared-constructor key:
+/// "shop::Cart::Cart/1" -> "shop::Cart::Cart". Sema stores constructors
+/// arity-keyed; host symbols never carry the suffix, so any name comparison
+/// must strip it first.
+std::string stripAritySuffix(const std::string& name) {
+    auto pos = name.rfind('/');
+    if (pos == std::string::npos || pos + 1 >= name.size()) return name;
+    for (size_t i = pos + 1; i < name.size(); ++i) {
+        if (!std::isdigit(static_cast<unsigned char>(name[i]))) return name;
+    }
+    return name.substr(0, pos);
 }
 
 bool shouldSkipSymbol(const HostSymbol& sym,
@@ -141,10 +155,21 @@ void checkCompleteness(const std::vector<HostSymbol>& hostSymbols,
                         }
                     }
                     if (!declared) {
+                        // Constructors match kind-based: host extractors report
+                        // language-specific simple names ("Cart", "__init__",
+                        // "constructor"), so name equality against the declared
+                        // keys cannot be the only path — any declared ctor of
+                        // the resolved class satisfies a host Constructor.
+                        if (hs.kind == HostSymbolKind::Constructor &&
+                            !cls->constructors.empty()) {
+                            declared = true;
+                        }
                         for (const auto& ctor : cls->constructors) {
-                            if (ctor == hs.qualifiedName || extractSimpleName(ctor) == hs.simpleName) {
+                            if (declared) break;
+                            const std::string key = stripAritySuffix(ctor);
+                            if (key == hs.qualifiedName ||
+                                extractSimpleName(key) == hs.simpleName) {
                                 declared = true;
-                                break;
                             }
                         }
                     }

@@ -5,6 +5,10 @@ set -e
 
 FIXTURES_DIR="${TOPO_FIXTURES_DIR:?TOPO_FIXTURES_DIR not set}"
 
+# topo-build resolves backend tools (topo-build-llvm-cpp) via PATH.
+PATH="${TOPO_BACKEND_TOOL_DIR:?TOPO_BACKEND_TOOL_DIR not set}:$PATH"
+export PATH
+
 PROJECT="incremental"
 PROJECT_DIR="$FIXTURES_DIR/$PROJECT"
 
@@ -13,10 +17,12 @@ if [ ! -d "$PROJECT_DIR" ]; then
     exit 1
 fi
 
-# Build
+# Build. Always --no-check: this suite verifies the CLI build pipeline
+# (config parse, backend dispatch, link, run output), not declaration
+# conformance — the checker has its own suites.
 echo "Building $PROJECT..."
 cd "$PROJECT_DIR"
-"${TOPO_BUILD_EXE:?TOPO_BUILD_EXE not set}"
+"${TOPO_BUILD_EXE:?TOPO_BUILD_EXE not set}" --no-check
 if [ $? -ne 0 ]; then
     echo "FAIL: topo-build failed"
     exit 1

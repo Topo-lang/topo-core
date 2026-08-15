@@ -100,10 +100,15 @@ public:
     // Check if the subprocess is currently running.
     bool isRunning() const;
 
-    // Exit code captured by stop(). Valid only after stop() has observed the
-    // child terminating on its own (before the timeout). Returns -1 when the
-    // child was force-killed, when stop() has not been called yet, or on any
-    // OS-level error retrieving the status.
+    // Exit code captured once stop() or isRunning() observed termination.
+    // A child that exits on its own within stop()'s grace window reports its
+    // own exit code (including nonzero). When stop() escalates to forceful
+    // termination (the child failed to exit within timeoutMs), exitCode()
+    // is -1 on every platform. -1 is also returned before any termination
+    // was observed and on OS-level errors retrieving the status. Only the
+    // stop()-initiated kill is normalized: a child that dies abnormally on
+    // its own keeps the platform encoding (POSIX 128+signo via reproc,
+    // Windows NTSTATUS).
     int exitCode() const { return exitStatus_.load(std::memory_order_relaxed); }
 
 private:

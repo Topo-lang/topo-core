@@ -75,6 +75,7 @@ if(TOPO_CORE_WITH_LANG)
         unit/PipedProcessTest.cpp
         unit/ProcessSpawnTest.cpp
         unit/TempFileTest.cpp
+        unit/FileGlobTest.cpp
         unit/SanitizeTest.cpp
         unit/FrontendPerfTest.cpp
         unit/VerificationOrchestratorTest.cpp

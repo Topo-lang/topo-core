@@ -64,10 +64,13 @@ add_test(NAME smoke.build.config
 set_tests_properties(smoke.build.config PROPERTIES
     LABELS "smoke;build" TIMEOUT 15)
 
-# Shell E2E tests for topo-build
-if(TOPO_ENABLE_LLVM AND TARGET topo-build)
-    add_subdirectory(e2e)
-endif()
+# Shell E2E tests for topo-build. e2e/ self-gates on the topo-build +
+# topo-build-llvm-cpp targets (single source of truth for the gate), so the
+# add is unconditional here. Note this line is unreachable in contexts where
+# the TopoBuildLib / TOPO_CORE_TOPO_CLI_SOURCE_DIR returns above fire;
+# consumers that have the targets but not this suite's prerequisites add
+# e2e/ directly.
+add_subdirectory(e2e)
 
 # Feature dimension labels
 set_property(DIRECTORY APPEND PROPERTY

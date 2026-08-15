@@ -1,0 +1,14 @@
+[project]
+name = "mixed_pass_two_halves"
+
+[topo]
+root = "topo/main.topo"
+
+[build]
+language = "mixed"
+
+[build.cpp]
+sources = ["src/*.cpp"]
+
+[build.rust]
+manifest = "rust_lib/Cargo.toml"

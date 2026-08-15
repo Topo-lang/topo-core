@@ -48,7 +48,7 @@
 
 # 07 General syntax errors
 "07.err_illegal_character"     = ["spec/syntax/invalid/illegal_character.topo"]
-"07.err_unexpected_token"      = ["spec/syntax/invalid/unexpected_token.topo"]
+"07.err_unexpected_token"      = ["spec/syntax/invalid/unexpected_token.topo", "spec/syntax/recovery/top_level_illegal_visibility.topo"]
 "07.err_missing_rparen"        = ["spec/syntax/invalid/missing_rparen.topo"]
 "07.err_empty_namespace"       = ["spec/syntax/invalid/empty_namespace.topo"]
 "07.err_unclosed_namespace"    = ["spec/syntax/invalid/unclosed_namespace.topo"]
@@ -85,7 +85,7 @@
 "08.6_multi_return_invalid" = ["spec/multireturn/invalid/multireturn_duplicate_param.topo", "spec/multireturn/invalid/multireturn_too_few.topo", "spec/multireturn/invalid/too_many_returns.topo"]
 "08.6_with_returns"         = ["spec/multireturn/valid/basic_with_returns.topo", "spec/multireturn/valid/with_returns_all_fields.topo", "spec/multireturn/valid/with_returns_all_underscore.topo"]
 "08.6_with_returns_invalid" = ["spec/multireturn/invalid/with_returns_unknown_name.topo", "spec/multireturn/invalid/with_returns_duplicate.topo", "spec/multireturn/invalid/with_returns_too_many.topo", "spec/multireturn/invalid/with_returns_empty.topo"]
-"08.6_parameter_list"       = ["spec/declarations/valid/minimal_function.topo"]
+"08.6_parameter_list"       = ["spec/declarations/valid/minimal_function.topo", "spec/declarations/valid/multi_reference_params.topo"]
 "08.6_const_member"         = []
 "08.6_operator_decl"        = ["spec/classes/valid/operator_decl.topo", "spec/classes/valid/operator_overload.topo", "spec/classes/valid/operator_binding.topo"]
 "08.6_constructor_decl"     = ["spec/classes/valid/constructor_destructor.topo"]
@@ -143,6 +143,7 @@
 "08.stdlib_slice"           = ["spec/stdlib/valid/slice_type.topo", "spec/stdlib/valid/all_six_types.topo", "spec/stdlib/valid/all_fifteen_types.topo"]
 "08.stdlib_arity_invalid"   = ["spec/stdlib/invalid/optional_missing_t.topo", "spec/stdlib/invalid/optional_too_many_args.topo", "spec/stdlib/invalid/bool_with_template_arg.topo"]
 "08.stdlib_inner_invalid"   = ["spec/stdlib/invalid/slice_unknown_t.topo"]
+"08.stdlib_keyword_not_identifier" = ["spec/stdlib/invalid/keyword_as_param_name.topo"]
 
 # 08 Stdlib width-extension scalar keywords — "扩条目而非扩路径"
 "08.stdlib_u8"              = ["spec/stdlib/valid/u8_type.topo", "spec/stdlib/valid/all_fifteen_types.topo"]

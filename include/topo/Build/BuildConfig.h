@@ -94,6 +94,11 @@ struct BuildConfig {
     bool embedIR = false;
     std::string hostCompilerPath; // clang++ path (resolved at init)
     std::string cargoPath = "cargo";
+    // [build.cpp].flags — extra clang++ flags applied at both compile-to-IR
+    // and link. Populated for plain cpp by the CLI front end, for mixed by
+    // the mixed backend from mixedCfg.cppFlags. Order-preserving: flag order
+    // is semantic (last flag wins for clang).
+    std::vector<std::string> cppFlags;
     ParallelConfig parallelCfg;
     AdaptiveConfig adaptiveCfg;
     DataLayoutConfig dataLayoutCfg;
