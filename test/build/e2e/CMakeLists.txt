@@ -25,7 +25,12 @@ set(SHELL_TEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 # every output by name. Copying to the build dir keeps the source pristine and
 # makes the per-binary ignore list unnecessary.
 set(E2E_FIXTURES_RUN_DIR "${CMAKE_CURRENT_BINARY_DIR}/run-fixtures")
-file(COPY "${TOPO_CORE_BUILD_FIXTURES_DIR}/" DESTINATION "${E2E_FIXTURES_RUN_DIR}")
+# Fixtures dir derived from THIS file's location, not a parent-scope
+# variable: the meta union build late-adds this directory from the
+# meta-root scope (the inline add self-skips before topo-build /
+# topo-build-llvm-cpp exist), where topo-core's directory-scoped
+# TOPO_CORE_BUILD_FIXTURES_DIR is out of scope.
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/../fixtures/" DESTINATION "${E2E_FIXTURES_RUN_DIR}")
 
 # TOPO_BACKEND_TOOL_DIR: topo-build resolves backend tools via its exe dir,
 # then PATH; the scripts prepend this dir so dispatch hits the build-tree
