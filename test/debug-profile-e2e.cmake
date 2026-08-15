@@ -36,8 +36,14 @@ set(_TOPO_DEBUG_BIN "$<TARGET_FILE:topo-debug>")
 #     blocks assume) and lldb-on-PE DAP behavior is unverified;
 #   * java — the JDWP attach + javac fixture pipeline is unverified on
 #     Windows runners (JAVA_HOME/launcher pathing differs);
-#   * python / typescript — debugpy / CDP adapters spawn fine now, but
-#     their path/URI handling for drive letters is unverified;
+#   * python — the debugpy adapter IS verified on a windows-2022 public
+#     surface (topo-lang-python CI drives a topo-debug query through the
+#     debugpy launcher). This meta block stays NOT WIN32 because the meta
+#     union build has no Windows CI surface — the private multi-repo
+#     workspace verifies locally, and each public repo's CI is the
+#     per-repo verification surface;
+#   * typescript — the CDP adapter spawns fine now, but drive-letter
+#     path/URI handling is unverified;
 #   * profile blocks — ride the same per-language fixtures.
 # The mock-adapter query e2e (no host toolchain) already runs on Windows.
 
