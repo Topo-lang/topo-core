@@ -13,3 +13,14 @@
 *.ll
 *.topo-passes/
 Cargo.lock
+
+# topo-build places the fixture project executable (extensionless, named
+# after the project) in the project ROOT. Ignore that depth-2 file slot as a
+# KIND; the negations keep committed depth-2 sources visible to `git add -A`
+# (fixture root files today are only Topo.toml / CMakeLists.txt / Cargo.toml /
+# *.md — all covered; subdirectories stay recursed via !/*/).
+/*/*
+!/*/
+!/*/*.toml
+!/*/*.txt
+!/*/*.md
