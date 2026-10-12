@@ -1070,6 +1070,7 @@ void from_json(const json& j, TranspileType& t) {
 void to_json(json& j, const TranspileFunction& f) {
     j = json::object();
     j["qualifiedName"] = f.qualifiedName;
+    if (!f.resolvedQualifiedName.empty()) j["resolvedQualifiedName"] = f.resolvedQualifiedName;
     if (f.isExternal) j["isExternal"] = true;
     if (!f.owningType.empty()) j["owningType"] = f.owningType;
     if (!f.externalOwner.empty()) j["externalOwner"] = f.externalOwner;
@@ -1113,6 +1114,7 @@ void to_json(json& j, const TranspileFunction& f) {
 }
 
 void from_json(const json& j, TranspileFunction& f) {
+    f.resolvedQualifiedName = j.value("resolvedQualifiedName", std::string{});
     f.isExternal = j.value("isExternal", false);
     f.owningType = j.value("owningType", "");
     f.externalOwner = j.value("externalOwner", "");

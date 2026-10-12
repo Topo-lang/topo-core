@@ -300,6 +300,9 @@ struct TranspileFunction {
     // templates). Same TemplateParamDecl reuse and empty-default
     // backward-compat convention as TranspileType::templateParams.
     std::vector<TemplateParamDecl> templateParams;
+    // Optional extractor-resolved identity for declaration-boundary matching.
+    // Empty preserves qualifiedName fallback and legacy JSON output.
+    std::string resolvedQualifiedName;
 };
 
 struct TranspileModule {

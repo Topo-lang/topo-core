@@ -4,6 +4,7 @@
 #include "topo/Parser/Parser.h"
 #include "topo/Sema/SemanticAnalyzer.h"
 #include "topo/Transform/TokenStreamRewriter.h"
+#include "topo/Transpile/TranspileModelJson.h"
 #include <gtest/gtest.h>
 using namespace topo;
 
@@ -61,4 +62,34 @@ TEST(ExternalTypeLinkage, TypeScriptBackendRequestRetainsWholeTypeAndMemberProve
         EXPECT_EQ(fn->owningType, "app::Log"); EXPECT_EQ(fn->externalOwner, "app::Log");
     }
     EXPECT_FALSE(restored.symbolTable.findFunction("app::Other::write")->isExternal);
+}
+
+TEST(ExternalTypeLinkage, TranspileFunctionResolvedIdentitySurvivesJsonRoundTrip) {
+    transpile::TranspileFunction original;
+    original.qualifiedName = "write";
+    original.resolvedQualifiedName = "app::Log::write";
+    original.isExternal = true;
+    original.owningType = "app::Log";
+    original.externalOwner = "app::Log";
+    const nlohmann::json encoded = original;
+    EXPECT_EQ(encoded.at("resolvedQualifiedName"), "app::Log::write");
+    const auto restored = encoded.get<transpile::TranspileFunction>();
+    EXPECT_EQ(restored.qualifiedName, "write");
+    EXPECT_EQ(restored.resolvedQualifiedName, "app::Log::write");
+    EXPECT_TRUE(restored.isExternal);
+    EXPECT_EQ(restored.owningType, "app::Log");
+    EXPECT_EQ(restored.externalOwner, "app::Log");
+}
+
+TEST(ExternalTypeLinkage, LegacyTranspileFunctionJsonClearsOptionalResolvedIdentity) {
+    transpile::TranspileFunction original;
+    original.qualifiedName = "app::Log::write";
+    const nlohmann::json legacy = original;
+    EXPECT_FALSE(legacy.contains("resolvedQualifiedName"));
+    transpile::TranspileFunction restored;
+    restored.resolvedQualifiedName = "stale::Other::write";
+    transpile::from_json(legacy, restored);
+    EXPECT_EQ(restored.qualifiedName, "app::Log::write");
+    EXPECT_TRUE(restored.resolvedQualifiedName.empty());
+    EXPECT_EQ(nlohmann::json(restored), legacy);
 }
