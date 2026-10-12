@@ -2,6 +2,7 @@
 #include "topo/Distribution/Sha256.h"
 #include "topo/Build/ArtifactEvidence.h"
 #include "topo/Build/ArtifactAttestation.h"
+#include "topo/Platform/TempFile.h"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -14,6 +15,12 @@ namespace {
 namespace fs = std::filesystem;
 namespace ev = build::evidence;
 using json = nlohmann::json;
+fs::path physicalPath(const fs::path& path) {
+    std::error_code error;
+    auto resolved = platform::canonicalPath(path, error);
+    if (error) throw std::runtime_error("cannot resolve evidence path: " + path.string());
+    return resolved;
+}
 json readJson(const fs::path& path) {
     if (!fs::is_regular_file(path) || fs::file_size(path) > 16 * 1024 * 1024)
         throw std::runtime_error("invalid or oversized JSON input: " + path.string());
@@ -23,8 +30,20 @@ std::vector<ev::FileEntry> inventory(const std::string& id, const fs::path& root
     if (!fs::is_directory(root)) throw std::runtime_error("inventory root must be a directory");
     std::vector<ev::FileEntry> result;
     std::string error;
-    for (const auto& entry : fs::recursive_directory_iterator(root)) {
-        if (result.size() >= 100000) throw std::runtime_error("inventory exceeds 100000 files");
+    std::size_t visited = 0;
+    for (auto cursor = fs::recursive_directory_iterator(root);
+         cursor != fs::recursive_directory_iterator(); ++cursor) {
+        const auto& entry = *cursor;
+        if (++visited > 100000) throw std::runtime_error("inventory exceeds 100000 entries");
+        std::error_code ec;
+        const bool redirected = platform::isPathRedirect(entry.path(), ec);
+        if (ec) throw std::runtime_error("cannot inspect inventory path: " + entry.path().string());
+        if (redirected) {
+            cursor.disable_recursion_pending();
+#ifdef _WIN32
+            throw std::runtime_error("Windows reparse-point inventory is unsupported: " + entry.path().string());
+#endif
+        }
         auto status=entry.symlink_status();
         if (fs::is_directory(status)) continue;
         ev::FileEntry file;
@@ -71,7 +90,7 @@ int runEvidenceCli(const std::vector<std::string>& args) {
             if (option=="--root") {
                 auto at=value.find('=');
                 if (at==std::string::npos || !at || at+1==value.size()) throw std::runtime_error("--root requires ID=DIR");
-                if (!roots.emplace(value.substr(0,at),fs::canonical(value.substr(at+1))).second)
+                if (!roots.emplace(value.substr(0,at),physicalPath(value.substr(at+1))).second)
                     throw std::runtime_error("duplicate evidence root");
             } else if (option=="--output") output=value;
             else if (option=="--manifest") manifestPath=value;
@@ -93,7 +112,8 @@ int runEvidenceCli(const std::vector<std::string>& args) {
             record.complete=true;
             for (const auto& [id,root] : roots) {
                 // Sidecars belong outside the payload to avoid recursive/self hashes.
-                auto relative=fs::weakly_canonical(output).lexically_relative(root);
+                const auto outputPath = fs::absolute(output);
+                auto relative = (physicalPath(outputPath.parent_path()) / outputPath.filename()).lexically_relative(root);
                 if (!relative.empty() && *relative.begin()!="..") throw std::runtime_error("write evidence outside payload roots");
                 auto files=inventory(id,root);
                 record.outputs.insert(record.outputs.end(),files.begin(),files.end());
