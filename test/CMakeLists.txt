@@ -155,6 +155,19 @@ if(TOPO_CORE_WITH_LANG)
         DISCOVERY_TIMEOUT 30
         PROPERTIES LABELS "toolchain\;core" TIMEOUT 120)
 
+    # Exercises the shared model against every emitter without depending on
+    # source-extractor staging (which belongs to the separate e2e suite).
+    if(TARGET topo::v8::TopoV8Codegen)
+        add_executable(topo-transpile-semantics-tests unit/TranspileJavaSemanticsTest.cpp)
+        target_link_libraries(topo-transpile-semantics-tests PRIVATE
+            topo::lang-cpp::TopoCppTranspile topo::lang-rust::TopoRustTranspile
+            topo::lang-java::TopoJavaTranspile topo::lang-python::TopoPythonTranspile
+            topo::v8::TopoV8Codegen nlohmann_json::nlohmann_json GTest::gtest_main)
+        topo_set_compiler_flags(topo-transpile-semantics-tests)
+        gtest_discover_tests(topo-transpile-semantics-tests DISCOVERY_TIMEOUT 30
+            PROPERTIES LABELS "toolchain\;transpile" TIMEOUT 120)
+    endif()
+
     # Smoke tests: fast subset for sanity checking (<30s total)
     # These cover parser, sema, and check fundamentals — if these fail, nothing works.
     add_test(NAME smoke.core.parser

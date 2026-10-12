@@ -9,6 +9,7 @@
 #include "topo/Sema/SemanticAnalyzer.h"
 #include "topo/Transpile/Emitter.h"
 #include "topo/Transpile/TranspileModelJson.h"
+#include "topo/Transpile/TranspileTraversal.h"
 #include "topo/Transpile/TopoSourceBuilder.h"
 #include "topo/Transpile/AdapterResolver.h"
 #include "topo/Platform/Process.h"
@@ -37,25 +38,55 @@ void tallyFidelity(Fidelity f, FidelityBreakdown& b) {
     case Fidelity::Inferred:  ++b.inferred; break;
     }
 }
+
+void mergeUnsupportedSummaries(std::vector<std::string>& nodes,
+                               const std::vector<std::string>& summaries) {
+    // Extractors may repeat an AST placeholder in the legacy function summary.
+    // Match occurrences, not a set: two distinct nodes with the same description
+    // are still two unsupported constructs.
+    std::multiset<std::string> remaining(nodes.begin(), nodes.end());
+    for (const auto& summary : summaries) {
+        auto found = remaining.find(summary);
+        if (found != remaining.end()) remaining.erase(found);
+        else nodes.push_back(summary);
+    }
+}
+
+void appendUnsupported(TranspileVerification& verification, const std::string& owner,
+                       std::vector<std::string> nodes, const std::vector<std::string>& summaries) {
+    mergeUnsupportedSummaries(nodes, summaries);
+    if (nodes.empty()) return;
+    verification.totalUnsupported += static_cast<int>(nodes.size());
+    verification.perFunction.push_back(FunctionUnsupported{owner, std::move(nodes)});
+}
 } // namespace
 
 TranspileVerification verifyModule(const TranspileModule& module) {
     TranspileVerification v;
 
     for (const auto& fn : module.functions) {
-        if (!fn.unsupported.empty()) {
-            v.totalUnsupported += static_cast<int>(fn.unsupported.size());
-            v.perFunction.push_back(
-                FunctionUnsupported{fn.qualifiedName, fn.unsupported});
-        }
+        std::vector<std::string> nodes;
+        visitStatements(fn.body, [&](const Expr& expr) {
+            if (expr.kind() == Expr::Kind::Unsupported)
+                nodes.push_back(static_cast<const UnsupportedExpr&>(expr).description);
+        });
+        appendUnsupported(v, fn.qualifiedName, std::move(nodes), fn.unsupported);
         tallyFidelity(fn.fidelity, v.fidelity);
     }
 
     for (const auto& ty : module.types) {
+        std::vector<std::string> nodes;
+        auto collect = [&](const Expr& expr) {
+            if (expr.kind() == Expr::Kind::Unsupported)
+                nodes.push_back(static_cast<const UnsupportedExpr&>(expr).description);
+        };
         tallyFidelity(ty.fidelity, v.fidelity);
         for (const auto& fld : ty.fields) {
             tallyFidelity(fld.fidelity, v.fidelity);
+            visitExpr(fld.init.get(), collect);
         }
+        visitStatements(ty.initializers, collect);
+        appendUnsupported(v, ty.qualifiedName + "::<initializers>", std::move(nodes), ty.unsupported);
     }
 
     return v;
@@ -116,7 +147,7 @@ TranspileResult TranspileDriver::run(const TranspileRequest& request) {
     // 3. Extract function bodies via language-specific subprocess
     TranspileModule module;
     std::vector<std::string> extractErrors;
-    if (!extractFunctions(request.sourceLanguage, request.sourceFiles, functionNames, symbols, module, extractErrors)) {
+    if (!extractFunctions(request.sourceLanguage, request.javaProjectPath, request.sourceFiles, functionNames, symbols, module, extractErrors)) {
         result.warnings = std::move(extractErrors);
         return result;
     }
@@ -157,16 +188,16 @@ TranspileResult TranspileDriver::run(const TranspileRequest& request) {
 
     // 4. Emit output in the target language
     auto emitRes = emitOutput(request.targetLanguage, module);
-    if (emitRes.code.empty()) {
-        result.warnings.push_back("emitter produced empty output (target language emitter may not be available yet)");
-        return result;
-    }
-    std::string output = std::move(emitRes.code);
-
-    // Collect emitter errors (target-language capability issues)
+    result.verification = verifyModule(module);
+    result.unsupportedCount = result.verification.totalUnsupported;
     for (auto& e : emitRes.errors) {
         result.errors.push_back(e.location + ": " + e.reason);
     }
+    if (emitRes.code.empty()) {
+        if (result.errors.empty()) result.errors.push_back("emitter produced empty output");
+        return result;
+    }
+    std::string output = std::move(emitRes.code);
 
     // 5. Write output file
     namespace fs = std::filesystem;
@@ -310,14 +341,14 @@ TranspileResult TranspileDriver::runFromTopoSource(const TranspileRequest& reque
 
     // 4. Emit output in the target language (existing emitter dispatch).
     auto emitRes = emitOutput(request.targetLanguage, module);
-    if (emitRes.code.empty()) {
-        result.warnings.push_back(
-            "emitter produced empty output (target language emitter may not "
-            "be available yet)");
-        return result;
-    }
+    result.verification = verifyModule(module);
+    result.unsupportedCount = result.verification.totalUnsupported;
     for (auto& e : emitRes.errors) {
         result.errors.push_back(e.location + ": " + e.reason);
+    }
+    if (emitRes.code.empty()) {
+        if (result.errors.empty()) result.errors.push_back("emitter produced empty output");
+        return result;
     }
 
     // 5. Write output file (filename derives from the .topo stem, extension
@@ -460,6 +491,7 @@ bool TranspileDriver::parseTopoFile(const std::filesystem::path& topoFile,
 // ---------------------------------------------------------------------------
 
 bool TranspileDriver::extractFunctions(HostLanguage lang,
+                                       const std::filesystem::path& javaProjectPath,
                                        const std::vector<std::filesystem::path>& sources,
                                        const std::vector<std::string>& functionNames,
                                        const SymbolTable& symbols,
@@ -468,13 +500,52 @@ bool TranspileDriver::extractFunctions(HostLanguage lang,
     std::string toolName = extractorToolName(lang);
 
     // Build JSON request for the extractor
-    nlohmann::json request;
+    nlohmann::json request = nlohmann::json::object();
+    if (!javaProjectPath.empty()) {
+        if (lang != HostLanguage::Java) {
+            errors.push_back("Java project model requires Java source language");
+            return false;
+        }
+        try {
+            std::ifstream modelFile(javaProjectPath);
+            if (!modelFile) throw std::runtime_error("cannot open project model");
+            auto model = nlohmann::json::parse(modelFile);
+            if (!model.is_object()) throw std::runtime_error("expected JSON object");
+            request["sourceLevel"] = model.value("sourceLevel", std::string("25"));
+            for (const char* key : {"classpath", "sourcepath", "files"}) {
+                // Explicit sources fully replace the model's file selection,
+                // including stale or unavailable entries in that selection.
+                if (std::string(key) == "files" && !sources.empty()) continue;
+                auto paths = model.value(key, nlohmann::json::array());
+                if (!paths.is_array()) throw std::runtime_error(std::string(key) + " must be an array");
+                request[key] = nlohmann::json::array();
+                for (const auto& value : paths) {
+                    auto path = std::filesystem::path(value.get<std::string>());
+                    if (path.empty()) throw std::runtime_error(std::string(key) + " contains an empty path");
+                    if (path.is_relative()) path = javaProjectPath.parent_path() / path;
+                    path = std::filesystem::absolute(path).lexically_normal();
+                    if (!std::filesystem::exists(path)) throw std::runtime_error("path does not exist: " + path.string());
+                    request[key].push_back(path.string());
+                }
+            }
+        } catch (const std::exception& e) {
+            errors.push_back("invalid Java project model '" + javaProjectPath.string() + "': " + e.what());
+            return false;
+        }
+    } else if (lang == HostLanguage::Java) {
+        request["sourceLevel"] = "25";
+    }
 
     nlohmann::json filesArr = nlohmann::json::array();
     for (const auto& src : sources) {
         filesArr.push_back(src.string());
     }
-    request["files"] = std::move(filesArr);
+    if (!sources.empty() || !request.contains("files"))
+        request["files"] = std::move(filesArr);
+    if (request["files"].empty()) {
+        errors.push_back("no source files supplied (use --sources or Java project model files)");
+        return false;
+    }
 
     nlohmann::json funcsArr = nlohmann::json::array();
     for (const auto& fn : functionNames) {
@@ -544,7 +615,51 @@ bool TranspileDriver::extractFunctions(HostLanguage lang,
     // Parse response
     try {
         nlohmann::json responseJson = nlohmann::json::parse(responseStr);
+        if (lang == HostLanguage::Java &&
+            (!responseJson.contains("schemaVersion") ||
+             !responseJson["schemaVersion"].is_number_integer() ||
+             responseJson["schemaVersion"].get<int>() != 2 ||
+             !responseJson.contains("analysisComplete") ||
+             !responseJson["analysisComplete"].is_boolean() ||
+             !responseJson.contains("diagnostics") ||
+             !responseJson["diagnostics"].is_array())) {
+            errors.push_back(toolName + " requires Java schemaVersion 2 with analysisComplete and diagnostics; rebuild the Java extractor");
+            return false;
+        }
         module = deserializeModule(responseJson);
+        if (lang == HostLanguage::Java) {
+            // Java wire names follow JDT's dotted convention; the shared
+            // emitter namespace contract uses ::. Keep resolved provenance
+            // untouched so diagnostics still match the original source.
+            auto portableName = [](const std::string& name) {
+                std::string out;
+                for (char c : name) {
+                    if (c == '.') out += "::";
+                    else out += c;
+                }
+                return out;
+            };
+            for (auto& function : module.functions)
+                function.qualifiedName = portableName(function.qualifiedName);
+            for (auto& type : module.types)
+                type.qualifiedName = portableName(type.qualifiedName);
+        }
+        bool analysisFailed = false;
+        if (responseJson.contains("diagnostics")) {
+            for (const auto& diagnostic : responseJson.at("diagnostics")) {
+                if (diagnostic.value("severity", "error") != "error") continue;
+                errors.push_back(diagnostic.value("file", "") + ":" +
+                    std::to_string(diagnostic.value("line", 0)) + ": " +
+                    diagnostic.value("message", "extractor analysis failed"));
+                analysisFailed = true;
+            }
+        }
+        if (responseJson.contains("analysisComplete") &&
+            !responseJson.at("analysisComplete").get<bool>()) {
+            if (!analysisFailed) errors.push_back(toolName + " reported incomplete analysis");
+            analysisFailed = true;
+        }
+        if (analysisFailed) return false;
 
         // Per-extractor degradation signal — currently emitted by
         // topo-extract-java when JDT binding resolution OOMs and the

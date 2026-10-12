@@ -1,7 +1,28 @@
 #include "topo/Transpile/ModelOptimizer.h"
+#include "topo/Transpile/TranspileModelJson.h"
+#include "topo/Transpile/TranspileTraversal.h"
 #include <algorithm>
 
 namespace topo::transpile {
+
+namespace {
+void copySourceMetadata(Expr& to, const Expr& from) {
+    to.fidelity = from.fidelity;
+    to.sourceSpan = from.sourceSpan;
+    to.rawSource = from.rawSource;
+    to.resolvedQualifiedName = from.resolvedQualifiedName;
+    to.resolvedSignature = from.resolvedSignature;
+}
+
+bool hasClosureBinding(const TranspileFunction& function) {
+    bool found = false;
+    visitStatements(function.body, [&](const Expr& expr) {
+        found |= expr.kind() == Expr::Kind::Lambda || expr.kind() == Expr::Kind::MethodReference;
+    });
+    return found;
+}
+} // namespace
+
 
 // =====================================================================
 // Expression cloning
@@ -12,7 +33,7 @@ ExprPtr TempFoldingPass::cloneExpr(const Expr& expr) {
     case Expr::Kind::Literal: {
         const auto& e = static_cast<const LiteralExpr&>(expr);
         auto c = std::make_unique<LiteralExpr>();
-        c->fidelity = e.fidelity;
+        copySourceMetadata(*c, e);
         c->litKind = e.litKind;
         c->value = e.value;
         return c;
@@ -20,14 +41,14 @@ ExprPtr TempFoldingPass::cloneExpr(const Expr& expr) {
     case Expr::Kind::VarRef: {
         const auto& e = static_cast<const VarRefExpr&>(expr);
         auto c = std::make_unique<VarRefExpr>();
-        c->fidelity = e.fidelity;
+        copySourceMetadata(*c, e);
         c->name = e.name;
         return c;
     }
     case Expr::Kind::BinaryOp: {
         const auto& e = static_cast<const BinaryOpExpr&>(expr);
         auto c = std::make_unique<BinaryOpExpr>();
-        c->fidelity = e.fidelity;
+        copySourceMetadata(*c, e);
         c->op = e.op;
         c->lhs = cloneExpr(*e.lhs);
         c->rhs = cloneExpr(*e.rhs);
@@ -36,7 +57,7 @@ ExprPtr TempFoldingPass::cloneExpr(const Expr& expr) {
     case Expr::Kind::UnaryOp: {
         const auto& e = static_cast<const UnaryOpExpr&>(expr);
         auto c = std::make_unique<UnaryOpExpr>();
-        c->fidelity = e.fidelity;
+        copySourceMetadata(*c, e);
         c->op = e.op;
         c->operand = cloneExpr(*e.operand);
         return c;
@@ -44,8 +65,9 @@ ExprPtr TempFoldingPass::cloneExpr(const Expr& expr) {
     case Expr::Kind::Call: {
         const auto& e = static_cast<const CallExpr&>(expr);
         auto c = std::make_unique<CallExpr>();
-        c->fidelity = e.fidelity;
+        copySourceMetadata(*c, e);
         c->callee = e.callee;
+        if (e.receiver) c->receiver = cloneExpr(*e.receiver);
         for (const auto& arg : e.args)
             c->args.push_back(cloneExpr(*arg));
         return c;
@@ -53,7 +75,7 @@ ExprPtr TempFoldingPass::cloneExpr(const Expr& expr) {
     case Expr::Kind::MemberAccess: {
         const auto& e = static_cast<const MemberAccessExpr&>(expr);
         auto c = std::make_unique<MemberAccessExpr>();
-        c->fidelity = e.fidelity;
+        copySourceMetadata(*c, e);
         c->object = cloneExpr(*e.object);
         c->member = e.member;
         return c;
@@ -61,7 +83,7 @@ ExprPtr TempFoldingPass::cloneExpr(const Expr& expr) {
     case Expr::Kind::Index: {
         const auto& e = static_cast<const IndexExpr&>(expr);
         auto c = std::make_unique<IndexExpr>();
-        c->fidelity = e.fidelity;
+        copySourceMetadata(*c, e);
         c->object = cloneExpr(*e.object);
         c->index = cloneExpr(*e.index);
         return c;
@@ -69,7 +91,7 @@ ExprPtr TempFoldingPass::cloneExpr(const Expr& expr) {
     case Expr::Kind::Construct: {
         const auto& e = static_cast<const ConstructExpr&>(expr);
         auto c = std::make_unique<ConstructExpr>();
-        c->fidelity = e.fidelity;
+        copySourceMetadata(*c, e);
         c->type = e.type;
         for (const auto& arg : e.args)
             c->args.push_back(cloneExpr(*arg));
@@ -78,14 +100,14 @@ ExprPtr TempFoldingPass::cloneExpr(const Expr& expr) {
     case Expr::Kind::Unsupported: {
         const auto& e = static_cast<const UnsupportedExpr&>(expr);
         auto c = std::make_unique<UnsupportedExpr>();
-        c->fidelity = e.fidelity;
+        copySourceMetadata(*c, e);
         c->description = e.description;
         return c;
     }
     case Expr::Kind::Ternary: {
         const auto& e = static_cast<const TernaryExpr&>(expr);
         auto c = std::make_unique<TernaryExpr>();
-        c->fidelity = e.fidelity;
+        copySourceMetadata(*c, e);
         c->condition = cloneExpr(*e.condition);
         c->trueExpr = cloneExpr(*e.trueExpr);
         c->falseExpr = cloneExpr(*e.falseExpr);
@@ -94,22 +116,39 @@ ExprPtr TempFoldingPass::cloneExpr(const Expr& expr) {
     case Expr::Kind::CompoundAssign: {
         const auto& e = static_cast<const CompoundAssignExpr&>(expr);
         auto c = std::make_unique<CompoundAssignExpr>();
-        c->fidelity = e.fidelity;
+        copySourceMetadata(*c, e);
         c->op = e.op;
         c->target = cloneExpr(*e.target);
         c->value = cloneExpr(*e.value);
         return c;
     }
     case Expr::Kind::Lambda: {
-        // Lambda expressions have complex structure; clone as unsupported for now
-        auto c = std::make_unique<UnsupportedExpr>();
-        c->description = "lambda-clone";
+        const auto& e = static_cast<const LambdaExpr&>(expr);
+        auto c = std::make_unique<LambdaExpr>();
+        copySourceMetadata(*c, e);
+        c->captures = e.captures;
+        c->params = e.params;
+        c->returnType = e.returnType;
+        c->targetType = e.targetType;
+        for (const auto& stmt : e.body) c->body.push_back(deserializeStmt(serializeStmt(*stmt)));
+        return c;
+    }
+    case Expr::Kind::MethodReference: {
+        const auto& e = static_cast<const MethodReferenceExpr&>(expr);
+        auto c = std::make_unique<MethodReferenceExpr>();
+        copySourceMetadata(*c, e);
+        c->referenceKind = e.referenceKind;
+        c->callee = e.callee;
+        c->ownerType = e.ownerType;
+        c->targetType = e.targetType;
+        c->evaluateReceiverAtCreation = e.evaluateReceiverAtCreation;
+        if (e.receiver) c->receiver = cloneExpr(*e.receiver);
         return c;
     }
     case Expr::Kind::Throw: {
         const auto& e = static_cast<const ThrowExpr&>(expr);
         auto c = std::make_unique<ThrowExpr>();
-        c->fidelity = e.fidelity;
+        copySourceMetadata(*c, e);
         if (e.operand) c->operand = cloneExpr(*e.operand);
         return c;
     }
@@ -136,7 +175,7 @@ int TempFoldingPass::countRefs(const Expr& expr, const std::string& name) {
     }
     case Expr::Kind::Call: {
         const auto& e = static_cast<const CallExpr&>(expr);
-        int count = 0;
+        int count = e.receiver ? countRefs(*e.receiver, name) : 0;
         for (const auto& arg : e.args)
             count += countRefs(*arg, name);
         return count;
@@ -263,6 +302,7 @@ ExprPtr TempFoldingPass::replaceRef(ExprPtr expr, const std::string& name, const
     }
     case Expr::Kind::Call: {
         auto& e = static_cast<CallExpr&>(*expr);
+        if (e.receiver) e.receiver = replaceRef(std::move(e.receiver), name, replacement);
         for (auto& arg : e.args)
             arg = replaceRef(std::move(arg), name, replacement);
         return expr;
@@ -381,6 +421,9 @@ void TempFoldingPass::replaceRefInStmt(Stmt& stmt, const std::string& name, cons
 // =====================================================================
 
 void TempFoldingPass::run(TranspileFunction& func) {
+    // These rewrites are not scope-aware. Preserve capture identity and bound
+    // receiver evaluation timing until a closure-aware transformation exists.
+    if (hasClosureBinding(func)) return;
     foldBlock(func.body);
 }
 
@@ -647,6 +690,7 @@ bool NameHeuristicsPass::exprUsedAsIndex(const Expr& expr, const std::string& na
     case Expr::Kind::UnaryOp: return exprUsedAsIndex(*static_cast<const UnaryOpExpr&>(expr).operand, name);
     case Expr::Kind::Call: {
         const auto& e = static_cast<const CallExpr&>(expr);
+        if (e.receiver && exprUsedAsIndex(*e.receiver, name)) return true;
         for (const auto& arg : e.args)
             if (exprUsedAsIndex(*arg, name)) return true;
         return false;
@@ -786,6 +830,7 @@ void NameHeuristicsPass::renameInExpr(Expr& expr, const std::unordered_map<std::
     }
     case Expr::Kind::Call: {
         auto& e = static_cast<CallExpr&>(expr);
+        if (e.receiver) renameInExpr(*e.receiver, renames);
         for (auto& arg : e.args)
             renameInExpr(*arg, renames);
         break;
@@ -900,6 +945,7 @@ void NameHeuristicsPass::renameInStmts(std::vector<StmtPtr>& stmts,
 }
 
 void NameHeuristicsPass::run(TranspileFunction& func) {
+    if (hasClosureBinding(func)) return;
     renames_.clear();
     usedNames_.clear();
     counterIdx_ = 0;

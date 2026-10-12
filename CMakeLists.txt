@@ -142,6 +142,7 @@ add_subdirectory(tools/topo-debug)
 # path (TOPO_CORE_WITH_LANG OFF) and self-skips tests that pull source
 # files from topo-cli when TOPO_CORE_TOPO_CLI_SOURCE_DIR is unset.
 option(TOPO_CORE_BUILD_TESTS "Build topo-core tests" OFF)
+option(TOPO_CORE_DEFER_TESTS "Let an embedded parent register tests after language plugins" OFF)
 
 # Optional opt-in: point this at the topo-cli source tree (the
 # repo or worktree containing tools/topo-build/ and tools/topo-init/)
@@ -153,7 +154,7 @@ set(TOPO_CORE_TOPO_CLI_SOURCE_DIR "" CACHE PATH
 tools/topo-init/ headers/cpp sources used by select test suites). \
 Leave empty in standalone builds.")
 
-if(TOPO_CORE_BUILD_TESTS AND (PROJECT_IS_TOP_LEVEL OR TOPO_META_DRIVING_TESTS))
+if(TOPO_CORE_BUILD_TESTS AND NOT TOPO_CORE_DEFER_TESTS AND (PROJECT_IS_TOP_LEVEL OR TOPO_META_DRIVING_TESTS))
     enable_testing()
     # GoogleTest setup — only needed when topo-core drives its own tests
     # (PROJECT_IS_TOP_LEVEL) or meta is driving but topo-core is the only

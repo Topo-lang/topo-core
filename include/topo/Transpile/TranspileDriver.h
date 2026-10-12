@@ -21,6 +21,7 @@ struct TranspileRequest {
     std::filesystem::path outputDir;
     std::vector<std::string> functions;     // empty = all declared functions
     std::string pipelineName;               // empty = no pipeline filter
+    std::filesystem::path javaProjectPath;  // optional Java project model JSON
 
     // `.topo`-source mode. When true, the source side
     // is the `.topo` file itself: the driver builds the TranspileModule from
@@ -58,8 +59,8 @@ struct TranspileResult {
     std::vector<std::string> errors;   // target-language capability errors from emitter
     int unsupportedCount = 0;
     // Structured aggregate over the lifted module (unsupported counts +
-    // per-function list + fidelity breakdown). Populated whenever emission
-    // succeeds; empty/zeroed otherwise.
+    // per-function list + fidelity breakdown). Populated once a module reaches
+    // emission, including target-language capability failures.
     TranspileVerification verification;
 };
 
@@ -79,6 +80,7 @@ private:
 
     // Call extractor subprocess and get TranspileModule JSON
     bool extractFunctions(HostLanguage lang,
+                          const std::filesystem::path& javaProjectPath,
                           const std::vector<std::filesystem::path>& sources,
                           const std::vector<std::string>& functionNames,
                           const SymbolTable& symbols,

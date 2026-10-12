@@ -471,6 +471,43 @@ void from_json(const json& j, DecompileLevel& l) {
 // Expression serialization (polymorphic via "kind" discriminator)
 // ===================================================================
 
+// Optional source metadata remains absent for existing extractor payloads.
+template <typename Node>
+static void sourceToJson(json& j, const Node& node) {
+    if (node.sourceSpan) {
+        const auto& s = *node.sourceSpan;
+        j["sourceSpan"] = {{"file", s.file}, {"startOffset", s.startOffset},
+            {"endOffset", s.endOffset}, {"startLine", s.startLine},
+            {"startColumn", s.startColumn}, {"endLine", s.endLine}, {"endColumn", s.endColumn}};
+    }
+    if (!node.rawSource.empty()) j["rawSource"] = node.rawSource;
+}
+
+template <typename Node>
+static void sourceFromJson(const json& j, Node& node) {
+    node.sourceSpan.reset();
+    if (j.contains("sourceSpan")) {
+        const auto& s = j.at("sourceSpan");
+        node.sourceSpan = SourceSpan{s.at("file").get<std::string>(),
+            s.at("startOffset").get<int>(), s.at("endOffset").get<int>(),
+            s.at("startLine").get<int>(), s.at("startColumn").get<int>(),
+            s.at("endLine").get<int>(), s.at("endColumn").get<int>()};
+    }
+    node.rawSource = j.value("rawSource", std::string{});
+}
+
+template <typename Node>
+static void resolutionToJson(json& j, const Node& node) {
+    if (!node.resolvedQualifiedName.empty()) j["resolvedQualifiedName"] = node.resolvedQualifiedName;
+    if (!node.resolvedSignature.empty()) j["resolvedSignature"] = node.resolvedSignature;
+}
+
+template <typename Node>
+static void resolutionFromJson(const json& j, Node& node) {
+    node.resolvedQualifiedName = j.value("resolvedQualifiedName", std::string{});
+    node.resolvedSignature = j.value("resolvedSignature", std::string{});
+}
+
 static const char* exprKindStr(Expr::Kind k) {
     switch (k) {
     case Expr::Kind::BinaryOp: return "binaryop";
@@ -482,6 +519,7 @@ static const char* exprKindStr(Expr::Kind k) {
     case Expr::Kind::VarRef: return "varref";
     case Expr::Kind::Construct: return "construct";
     case Expr::Kind::Lambda: return "lambda";
+    case Expr::Kind::MethodReference: return "methodref";
     case Expr::Kind::Throw: return "throw";
     case Expr::Kind::Unsupported: return "unsupported";
     case Expr::Kind::Ternary: return "ternary";
@@ -500,6 +538,7 @@ static Expr::Kind exprKindFromStr(const std::string& s) {
     if (s == "varref") return Expr::Kind::VarRef;
     if (s == "construct") return Expr::Kind::Construct;
     if (s == "lambda") return Expr::Kind::Lambda;
+    if (s == "methodref") return Expr::Kind::MethodReference;
     if (s == "throw") return Expr::Kind::Throw;
     if (s == "ternary") return Expr::Kind::Ternary;
     if (s == "compoundassign") return Expr::Kind::CompoundAssign;
@@ -514,6 +553,8 @@ nlohmann::json serializeExpr(const Expr& e) {
     json j = json::object();
     j["kind"] = exprKindStr(e.kind());
     j["fidelity"] = e.fidelity;
+    sourceToJson(j, e);
+    resolutionToJson(j, e);
 
     switch (e.kind()) {
     case Expr::Kind::BinaryOp: {
@@ -532,6 +573,7 @@ nlohmann::json serializeExpr(const Expr& e) {
     case Expr::Kind::Call: {
         const auto& ce = static_cast<const CallExpr&>(e);
         j["callee"] = ce.callee;
+        if (ce.receiver) j["receiver"] = serializeExpr(*ce.receiver);
         json args = json::array();
         for (const auto& arg : ce.args)
             args.push_back(serializeExpr(*arg));
@@ -593,6 +635,17 @@ nlohmann::json serializeExpr(const Expr& e) {
         detail::typeNodeToJson(rty, le.returnType);
         j["returnType"] = std::move(rty);
         j["body"] = serializeStmtVec(le.body);
+        if (!le.targetType.nameParts.empty()) detail::typeNodeToJson(j["targetType"], le.targetType);
+        break;
+    }
+    case Expr::Kind::MethodReference: {
+        const auto& ref = static_cast<const MethodReferenceExpr&>(e);
+        j["referenceKind"] = ref.referenceKind;
+        j["callee"] = ref.callee;
+        j["evaluateReceiverAtCreation"] = ref.evaluateReceiverAtCreation;
+        if (ref.receiver) j["receiver"] = serializeExpr(*ref.receiver);
+        if (!ref.ownerType.nameParts.empty()) detail::typeNodeToJson(j["ownerType"], ref.ownerType);
+        if (!ref.targetType.nameParts.empty()) detail::typeNodeToJson(j["targetType"], ref.targetType);
         break;
     }
     case Expr::Kind::Throw: {
@@ -631,6 +684,8 @@ ExprPtr deserializeExpr(const json& j) {
     case Expr::Kind::BinaryOp: {
         auto e = std::make_unique<BinaryOpExpr>();
         e->fidelity = fid;
+        sourceFromJson(j, *e);
+        resolutionFromJson(j, *e);
         e->op = j.at("op").get<BinaryOp>();
         e->lhs = deserializeExpr(j.at("lhs"));
         e->rhs = deserializeExpr(j.at("rhs"));
@@ -639,6 +694,8 @@ ExprPtr deserializeExpr(const json& j) {
     case Expr::Kind::UnaryOp: {
         auto e = std::make_unique<UnaryOpExpr>();
         e->fidelity = fid;
+        sourceFromJson(j, *e);
+        resolutionFromJson(j, *e);
         e->op = j.at("op").get<UnaryOp>();
         e->operand = deserializeExpr(j.at("operand"));
         return e;
@@ -646,7 +703,10 @@ ExprPtr deserializeExpr(const json& j) {
     case Expr::Kind::Call: {
         auto e = std::make_unique<CallExpr>();
         e->fidelity = fid;
+        sourceFromJson(j, *e);
+        resolutionFromJson(j, *e);
         j.at("callee").get_to(e->callee);
+        if (j.contains("receiver")) e->receiver = deserializeExpr(j.at("receiver"));
         for (const auto& a : j.at("args"))
             e->args.push_back(deserializeExpr(a));
         return e;
@@ -654,6 +714,8 @@ ExprPtr deserializeExpr(const json& j) {
     case Expr::Kind::MemberAccess: {
         auto e = std::make_unique<MemberAccessExpr>();
         e->fidelity = fid;
+        sourceFromJson(j, *e);
+        resolutionFromJson(j, *e);
         e->object = deserializeExpr(j.at("object"));
         j.at("member").get_to(e->member);
         return e;
@@ -661,6 +723,8 @@ ExprPtr deserializeExpr(const json& j) {
     case Expr::Kind::Index: {
         auto e = std::make_unique<IndexExpr>();
         e->fidelity = fid;
+        sourceFromJson(j, *e);
+        resolutionFromJson(j, *e);
         e->object = deserializeExpr(j.at("object"));
         e->index = deserializeExpr(j.at("index"));
         return e;
@@ -668,6 +732,8 @@ ExprPtr deserializeExpr(const json& j) {
     case Expr::Kind::Literal: {
         auto e = std::make_unique<LiteralExpr>();
         e->fidelity = fid;
+        sourceFromJson(j, *e);
+        resolutionFromJson(j, *e);
         e->litKind = j.at("litKind").get<LiteralKind>();
         j.at("value").get_to(e->value);
         return e;
@@ -675,12 +741,16 @@ ExprPtr deserializeExpr(const json& j) {
     case Expr::Kind::VarRef: {
         auto e = std::make_unique<VarRefExpr>();
         e->fidelity = fid;
+        sourceFromJson(j, *e);
+        resolutionFromJson(j, *e);
         j.at("name").get_to(e->name);
         return e;
     }
     case Expr::Kind::Construct: {
         auto e = std::make_unique<ConstructExpr>();
         e->fidelity = fid;
+        sourceFromJson(j, *e);
+        resolutionFromJson(j, *e);
         detail::typeNodeFromJson(j.at("type"), e->type);
         for (const auto& a : j.at("args"))
             e->args.push_back(deserializeExpr(a));
@@ -689,6 +759,8 @@ ExprPtr deserializeExpr(const json& j) {
     case Expr::Kind::Lambda: {
         auto e = std::make_unique<LambdaExpr>();
         e->fidelity = fid;
+        sourceFromJson(j, *e);
+        resolutionFromJson(j, *e);
         for (const auto& cj : j.at("captures")) {
             CaptureEntry ce;
             cj.at("name").get_to(ce.name);
@@ -702,23 +774,43 @@ ExprPtr deserializeExpr(const json& j) {
         }
         detail::typeNodeFromJson(j.at("returnType"), e->returnType);
         e->body = deserializeStmtVec(j.at("body"));
+        if (j.contains("targetType")) detail::typeNodeFromJson(j.at("targetType"), e->targetType);
+        return e;
+    }
+    case Expr::Kind::MethodReference: {
+        auto e = std::make_unique<MethodReferenceExpr>();
+        e->fidelity = fid;
+        sourceFromJson(j, *e);
+        resolutionFromJson(j, *e);
+        e->referenceKind = j.at("referenceKind").get<std::string>();
+        e->callee = j.value("callee", std::string{});
+        e->evaluateReceiverAtCreation = j.value("evaluateReceiverAtCreation", e->referenceKind == "bound");
+        if (j.contains("receiver")) e->receiver = deserializeExpr(j.at("receiver"));
+        if (j.contains("ownerType")) detail::typeNodeFromJson(j.at("ownerType"), e->ownerType);
+        if (j.contains("targetType")) detail::typeNodeFromJson(j.at("targetType"), e->targetType);
         return e;
     }
     case Expr::Kind::Throw: {
         auto e = std::make_unique<ThrowExpr>();
         e->fidelity = fid;
+        sourceFromJson(j, *e);
+        resolutionFromJson(j, *e);
         e->operand = deserializeExpr(j.at("operand"));
         return e;
     }
     case Expr::Kind::Unsupported: {
         auto e = std::make_unique<UnsupportedExpr>();
         e->fidelity = fid;
+        sourceFromJson(j, *e);
+        resolutionFromJson(j, *e);
         j.at("description").get_to(e->description);
         return e;
     }
     case Expr::Kind::Ternary: {
         auto e = std::make_unique<TernaryExpr>();
         e->fidelity = fid;
+        sourceFromJson(j, *e);
+        resolutionFromJson(j, *e);
         e->condition = deserializeExpr(j.at("condition"));
         e->trueExpr = deserializeExpr(j.at("trueExpr"));
         e->falseExpr = deserializeExpr(j.at("falseExpr"));
@@ -727,6 +819,8 @@ ExprPtr deserializeExpr(const json& j) {
     case Expr::Kind::CompoundAssign: {
         auto e = std::make_unique<CompoundAssignExpr>();
         e->fidelity = fid;
+        sourceFromJson(j, *e);
+        resolutionFromJson(j, *e);
         e->op = j.at("op").get<BinaryOp>();
         e->target = deserializeExpr(j.at("target"));
         e->value = deserializeExpr(j.at("value"));
@@ -736,6 +830,8 @@ ExprPtr deserializeExpr(const json& j) {
     // Unreachable — all enum values handled above
     auto e = std::make_unique<UnsupportedExpr>();
     e->fidelity = fid;
+    sourceFromJson(j, *e);
+    resolutionFromJson(j, *e);
     e->description = "unknown expression kind";
     return e;
 }
@@ -793,6 +889,7 @@ nlohmann::json serializeStmt(const Stmt& s) {
     json j = json::object();
     j["kind"] = stmtKindStr(s.kind());
     j["fidelity"] = s.fidelity;
+    sourceToJson(j, s);
 
     switch (s.kind()) {
     case Stmt::Kind::VarDecl: {
@@ -885,6 +982,7 @@ StmtPtr deserializeStmt(const json& j) {
     case Stmt::Kind::VarDecl: {
         auto s = std::make_unique<VarDeclStmt>();
         s->fidelity = fid;
+        sourceFromJson(j, *s);
         detail::typeNodeFromJson(j.at("type"), s->type);
         j.at("name").get_to(s->name);
         if (j.contains("init")) s->init = deserializeExpr(j["init"]);
@@ -893,6 +991,7 @@ StmtPtr deserializeStmt(const json& j) {
     case Stmt::Kind::Assign: {
         auto s = std::make_unique<AssignStmt>();
         s->fidelity = fid;
+        sourceFromJson(j, *s);
         s->target = deserializeExpr(j.at("target"));
         s->value = deserializeExpr(j.at("value"));
         return s;
@@ -900,12 +999,14 @@ StmtPtr deserializeStmt(const json& j) {
     case Stmt::Kind::Return: {
         auto s = std::make_unique<ReturnStmt>();
         s->fidelity = fid;
+        sourceFromJson(j, *s);
         if (j.contains("value")) s->value = deserializeExpr(j["value"]);
         return s;
     }
     case Stmt::Kind::If: {
         auto s = std::make_unique<IfStmt>();
         s->fidelity = fid;
+        sourceFromJson(j, *s);
         s->condition = deserializeExpr(j.at("condition"));
         s->thenBody = deserializeStmtVec(j.at("thenBody"));
         if (j.contains("elseBody")) s->elseBody = deserializeStmtVec(j["elseBody"]);
@@ -914,6 +1015,7 @@ StmtPtr deserializeStmt(const json& j) {
     case Stmt::Kind::For: {
         auto s = std::make_unique<ForStmt>();
         s->fidelity = fid;
+        sourceFromJson(j, *s);
         if (j.contains("init")) s->init = deserializeStmt(j["init"]);
         if (j.contains("condition")) s->condition = deserializeExpr(j["condition"]);
         if (j.contains("increment")) s->increment = deserializeExpr(j["increment"]);
@@ -923,6 +1025,7 @@ StmtPtr deserializeStmt(const json& j) {
     case Stmt::Kind::While: {
         auto s = std::make_unique<WhileStmt>();
         s->fidelity = fid;
+        sourceFromJson(j, *s);
         s->condition = deserializeExpr(j.at("condition"));
         s->body = deserializeStmtVec(j.at("body"));
         return s;
@@ -930,12 +1033,14 @@ StmtPtr deserializeStmt(const json& j) {
     case Stmt::Kind::ExprStmt: {
         auto s = std::make_unique<ExprStmt>();
         s->fidelity = fid;
+        sourceFromJson(j, *s);
         s->expr = deserializeExpr(j.at("expr"));
         return s;
     }
     case Stmt::Kind::TryCatch: {
         auto s = std::make_unique<TryCatchStmt>();
         s->fidelity = fid;
+        sourceFromJson(j, *s);
         s->tryBody = deserializeStmtVec(j.at("tryBody"));
         for (const auto& cj : j.at("catchClauses")) {
             CatchClause c;
@@ -950,16 +1055,19 @@ StmtPtr deserializeStmt(const json& j) {
     case Stmt::Kind::Break: {
         auto s = std::make_unique<BreakStmt>();
         s->fidelity = fid;
+        sourceFromJson(j, *s);
         return s;
     }
     case Stmt::Kind::Continue: {
         auto s = std::make_unique<ContinueStmt>();
         s->fidelity = fid;
+        sourceFromJson(j, *s);
         return s;
     }
     case Stmt::Kind::Switch: {
         auto s = std::make_unique<SwitchStmt>();
         s->fidelity = fid;
+        sourceFromJson(j, *s);
         s->subject = deserializeExpr(j.at("subject"));
         for (const auto& cj : j.at("cases")) {
             SwitchCase sc;
@@ -973,6 +1081,7 @@ StmtPtr deserializeStmt(const json& j) {
     // Unreachable — all enum values handled above
     auto s = std::make_unique<ExprStmt>();
     s->fidelity = fid;
+    sourceFromJson(j, *s);
     auto unsup = std::make_unique<UnsupportedExpr>();
     unsup->description = "unknown statement kind";
     s->expr = std::move(unsup);
@@ -990,12 +1099,16 @@ void to_json(json& j, const TranspileField& f) {
     j["type"] = std::move(ty);
     j["name"] = f.name;
     j["fidelity"] = f.fidelity;
+    sourceToJson(j, f);
+    if (f.init) j["init"] = serializeExpr(*f.init);
 }
 
 void from_json(const json& j, TranspileField& f) {
     detail::typeNodeFromJson(j.at("type"), f.type);
     j.at("name").get_to(f.name);
     f.fidelity = j.value("fidelity", Fidelity::Source);
+    sourceFromJson(j, f);
+    f.init = j.contains("init") ? std::shared_ptr<Expr>(deserializeExpr(j.at("init"))) : nullptr;
 }
 
 void to_json(json& j, const TranspileType& t) {
@@ -1034,6 +1147,12 @@ void to_json(json& j, const TranspileType& t) {
         j["templateParams"] = std::move(tps);
     }
     j["fidelity"] = t.fidelity;
+    sourceToJson(j, t);
+    if (!t.unsupported.empty()) j["unsupported"] = t.unsupported;
+    if (!t.initializers.empty()) {
+        j["initializers"] = json::array();
+        for (const auto& init : t.initializers) j["initializers"].push_back(serializeStmt(*init));
+    }
 }
 
 void from_json(const json& j, TranspileType& t) {
@@ -1065,12 +1184,16 @@ void from_json(const json& j, TranspileType& t) {
         }
     }
     t.fidelity = j.value("fidelity", Fidelity::Source);
+    sourceFromJson(j, t);
+    t.unsupported = j.value("unsupported", std::vector<std::string>{});
+    t.initializers.clear();
+    if (j.contains("initializers"))
+        for (const auto& init : j.at("initializers")) t.initializers.push_back(deserializeStmt(init));
 }
 
 void to_json(json& j, const TranspileFunction& f) {
     j = json::object();
     j["qualifiedName"] = f.qualifiedName;
-    if (!f.resolvedQualifiedName.empty()) j["resolvedQualifiedName"] = f.resolvedQualifiedName;
     if (f.isExternal) j["isExternal"] = true;
     if (!f.owningType.empty()) j["owningType"] = f.owningType;
     if (!f.externalOwner.empty()) j["externalOwner"] = f.externalOwner;
@@ -1090,6 +1213,8 @@ void to_json(json& j, const TranspileFunction& f) {
 
     if (!f.unsupported.empty()) j["unsupported"] = f.unsupported;
     j["fidelity"] = f.fidelity;
+    sourceToJson(j, f);
+    resolutionToJson(j, f);
     if (!f.accessModifier.empty()) j["accessModifier"] = f.accessModifier;
 
     if (!f.throwsClause.empty()) {
@@ -1114,7 +1239,6 @@ void to_json(json& j, const TranspileFunction& f) {
 }
 
 void from_json(const json& j, TranspileFunction& f) {
-    f.resolvedQualifiedName = j.value("resolvedQualifiedName", std::string{});
     f.isExternal = j.value("isExternal", false);
     f.owningType = j.value("owningType", "");
     f.externalOwner = j.value("externalOwner", "");
@@ -1132,6 +1256,8 @@ void from_json(const json& j, TranspileFunction& f) {
 
     if (j.contains("unsupported")) j["unsupported"].get_to(f.unsupported);
     f.fidelity = j.value("fidelity", Fidelity::Source);
+    sourceFromJson(j, f);
+    resolutionFromJson(j, f);
     if (j.contains("accessModifier")) f.accessModifier = j["accessModifier"].get<std::string>();
 
     f.throwsClause.clear();

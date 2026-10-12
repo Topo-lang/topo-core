@@ -24,6 +24,14 @@ class LanguageAnalysisProvider {
 public:
     virtual ~LanguageAnalysisProvider() = default;
 
+    /// Supply project context before creating extractors. Paths in a model
+    /// are relative to the model file, not the calling process.
+    virtual void configureAnalysis(const std::string& /*projectDir*/,
+                                   const std::string& /*projectModelPath*/) {}
+
+    /// Extraction failures are check failures, even when no facts were produced.
+    virtual std::vector<CheckDiagnostic> analysisDiagnostics() const { return {}; }
+
     /// Semantic identities for an explicit audit. Legacy extraction has no
     /// implicit audit capability: unsupported facts must stay unverified.
     virtual AuditFacts auditFacts(const std::vector<std::string>& /*sourceFiles*/) const {

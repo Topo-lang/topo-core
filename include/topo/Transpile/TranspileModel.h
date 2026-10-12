@@ -12,6 +12,18 @@ namespace topo::transpile {
 // --- Fidelity: confidence level of each node ---
 enum class Fidelity { Source, Recovered, Inferred };
 
+// Offsets count UTF-16 code units; end positions are exclusive. Lines and
+// columns are one-based, matching the source extractor rather than emitted code.
+struct SourceSpan {
+    std::string file;
+    int startOffset = 0;
+    int endOffset = 0;
+    int startLine = 1;
+    int startColumn = 1;
+    int endLine = 1;
+    int endColumn = 1;
+};
+
 // --- Expression types ---
 
 enum class BinaryOp {
@@ -56,6 +68,10 @@ using StmtPtr = std::unique_ptr<Stmt>;
 
 struct Expr {
     Fidelity fidelity = Fidelity::Source;
+    std::optional<SourceSpan> sourceSpan;
+    std::string rawSource;
+    std::string resolvedQualifiedName;
+    std::string resolvedSignature;
     virtual ~Expr() = default;
 
     enum class Kind {
@@ -68,6 +84,7 @@ struct Expr {
         VarRef,
         Construct,
         Lambda,
+        MethodReference,
         Throw,
         Unsupported,
         Ternary,
@@ -90,7 +107,8 @@ struct UnaryOpExpr : Expr {
 };
 
 struct CallExpr : Expr {
-    std::string callee; // qualified name
+    std::string callee; // method name when receiver is present; otherwise qualified name
+    ExprPtr receiver; // preserve evaluation and the full member/call chain
     std::vector<ExprPtr> args;
     Kind kind() const override { return Kind::Call; }
 };
@@ -128,8 +146,21 @@ struct LambdaExpr : Expr {
     std::vector<CaptureEntry> captures;
     std::vector<Parameter> params;
     TypeNode returnType; // may be empty (inferred)
+    TypeNode targetType; // optional functional interface from the source binding
     std::vector<StmtPtr> body;
     Kind kind() const override { return Kind::Lambda; }
+};
+
+struct MethodReferenceExpr : Expr {
+    std::string referenceKind; // bound, type, super, constructor
+    std::string callee;
+    ExprPtr receiver;
+    TypeNode ownerType;
+    TypeNode targetType;
+    // Java bound references evaluate and null-check their receiver at creation.
+    // A target must preserve that timing or reject the construct.
+    bool evaluateReceiverAtCreation = false;
+    Kind kind() const override { return Kind::MethodReference; }
 };
 
 struct ThrowExpr : Expr {
@@ -160,6 +191,8 @@ struct CompoundAssignExpr : Expr {
 
 struct Stmt {
     Fidelity fidelity = Fidelity::Source;
+    std::optional<SourceSpan> sourceSpan;
+    std::string rawSource;
     virtual ~Stmt() = default;
 
     enum class Kind { VarDecl, Assign, Return, If, For, While, ExprStmt, TryCatch, Break, Continue, Switch };
@@ -248,6 +281,10 @@ struct TranspileField {
     TypeNode type;
     std::string name;
     Fidelity fidelity = Fidelity::Source;
+    std::optional<SourceSpan> sourceSpan;
+    std::string rawSource;
+    // Fields/types remain copyable descriptions; expression ownership is shared.
+    std::shared_ptr<Expr> init;
 };
 
 // Per-base class-vs-interface discriminator. Java needs this to place a base
@@ -279,6 +316,10 @@ struct TranspileType {
     // ⇒ JSON key omitted ⇒ byte-identical to pre-generics output.
     std::vector<TemplateParamDecl> templateParams;
     Fidelity fidelity = Fidelity::Source;
+    std::optional<SourceSpan> sourceSpan;
+    std::string rawSource;
+    std::vector<std::shared_ptr<Stmt>> initializers;
+    std::vector<std::string> unsupported;
 };
 
 struct TranspileFunction {
@@ -300,9 +341,12 @@ struct TranspileFunction {
     // templates). Same TemplateParamDecl reuse and empty-default
     // backward-compat convention as TranspileType::templateParams.
     std::vector<TemplateParamDecl> templateParams;
+    std::optional<SourceSpan> sourceSpan;
+    std::string rawSource;
     // Optional extractor-resolved identity for declaration-boundary matching.
     // Empty preserves qualifiedName fallback and legacy JSON output.
     std::string resolvedQualifiedName;
+    std::string resolvedSignature;
 };
 
 struct TranspileModule {
@@ -335,9 +379,9 @@ struct FidelityBreakdown {
 };
 
 struct TranspileVerification {
-    int totalUnsupported = 0;                          // sum over all functions
-    std::vector<FunctionUnsupported> perFunction;       // only functions with >=1 unsupported
-    FidelityBreakdown fidelity;                          // function + type + field fidelity
+    int totalUnsupported = 0;                          // functions and type/field initializers
+    std::vector<FunctionUnsupported> perFunction;       // functions or synthetic type initializer scopes with loss
+    FidelityBreakdown fidelity;                        // function + type + field fidelity
 
     bool clean() const { return totalUnsupported == 0; }
 };
