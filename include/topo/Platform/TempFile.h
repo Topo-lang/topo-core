@@ -3,6 +3,7 @@
 
 #include <filesystem>
 #include <string>
+#include <system_error>
 
 namespace topo::platform {
 
@@ -32,6 +33,20 @@ std::filesystem::path tempDirectory();
 /// `getenv("HOME")` pattern is forbidden by the no-bare-home-getenv
 /// audit gate because it silently breaks on Windows.
 std::filesystem::path homeDirectory();
+
+/// Resolve an existing file or directory to its physical target path.
+/// Windows resolves the opened handle through Win32, including native links
+/// that some MinGW std::filesystem implementations leave unresolved.
+/// Filesystem errors return an empty path and set `error`.
+std::filesystem::path canonicalPath(const std::filesystem::path& path,
+                                    std::error_code& error);
+
+/// Inspect the final path component without following its redirection.
+/// POSIX detects symbolic links; Windows treats every reparse-point tag as a
+/// redirect. Ancestors may still be followed, so callers that forbid redirects
+/// throughout a path must inspect each component. Read failures set `error`
+/// and return false; an ordinary path returns false with `error` cleared.
+bool isPathRedirect(const std::filesystem::path& path, std::error_code& error);
 
 /// Atomically replace a file on the same filesystem. Throws on failure.
 void atomicReplaceFile(const std::filesystem::path& source,

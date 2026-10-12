@@ -1,5 +1,6 @@
 #include "topo/Build/ArtifactEvidence.h"
 #include "topo/Distribution/Sha256.h"
+#include "topo/Platform/TempFile.h"
 
 #include <algorithm>
 #include <chrono>
@@ -211,25 +212,35 @@ bool snapshotFile(const fs::path& root, const std::string& rootId, const std::st
     error.clear();
     if (!rootName(rootId) || !relativePath(path)) return fail(error, "invalid root or portable relative path");
     std::error_code ec;
-    auto canonicalRoot = fs::canonical(root, ec);
+    auto canonicalRoot = platform::canonicalPath(root, ec);
     if (ec || !fs::is_directory(canonicalRoot, ec)) return fail(error, "evidence root is not a readable directory");
     auto full = canonicalRoot / fs::path(path);
     auto parent = canonicalRoot;
     for (const auto& part : fs::path(path).parent_path()) {
         parent /= part;
+        const bool redirected = platform::isPathRedirect(parent, ec);
+        if (ec || redirected)
+            return fail(error, "intermediate symlink/reparse point or unavailable directory: " + path);
         auto status = fs::symlink_status(parent, ec);
         if (ec || !fs::is_directory(status) || fs::is_symlink(status))
             return fail(error, "intermediate symlink or unavailable directory: " + path);
     }
+    const bool redirected = platform::isPathRedirect(full, ec);
+    if (ec) return fail(error, "cannot inspect evidence path redirection: " + path);
+#ifdef _WIN32
+    // MinGW may report a native reparse point as its target's regular type.
+    // Preserve failure until native link-text/tag identities are supported.
+    if (redirected) return fail(error, "Windows reparse-point evidence identity is unsupported: " + path);
+#endif
     auto status = fs::symlink_status(full, ec);
     if (ec) return fail(error, "cannot stat evidence file: " + path);
     FileEntry f; f.root = rootId; f.path = path;
-    if (fs::is_symlink(status)) {
+    if (redirected) {
         f.kind = "symlink";
         auto target = fs::read_symlink(full, ec);
         if (ec || target.is_absolute()) return fail(error, "symlink must have a readable relative target: " + path);
         f.symlinkTarget = target.generic_string();
-        auto resolved = fs::canonical(full, ec);
+        auto resolved = platform::canonicalPath(full, ec);
         if (ec) return fail(error, "symlink target is missing or cyclic: " + path);
         auto rel = resolved.lexically_relative(canonicalRoot).generic_string();
         if (!relativePath(rel)) return fail(error, "symlink escapes approved root: " + path);

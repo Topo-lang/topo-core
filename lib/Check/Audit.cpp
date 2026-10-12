@@ -1,5 +1,6 @@
 #include "topo/Check/Audit.h"
 #include "topo/Distribution/Sha256.h"
+#include "topo/Platform/TempFile.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -17,9 +18,16 @@ std::string digest(const json& j) { return dist::sha256Hex(j.dump()); }
 
 fs::path auditCanonical(const fs::path& p) {
     std::error_code ec;
-    auto result = fs::canonical(p, ec);
+    auto result = platform::canonicalPath(p, ec);
     if (ec) throw std::runtime_error("cannot resolve audit input: " + p.string());
     return result;
+}
+
+bool auditRedirect(const fs::path& path) {
+    std::error_code error;
+    const bool redirect = platform::isPathRedirect(path, error);
+    if (error) throw std::runtime_error("cannot inspect audit input: " + path.string());
+    return redirect;
 }
 
 json snapshot(const fs::path& input) {
@@ -204,10 +212,13 @@ nlohmann::json makeAuditReport(const std::string& project, const AuditFacts& fac
                 json paths = json::array();
                 std::vector<fs::path> entries;
                 std::size_t visited=0;
-                for (const auto& e : fs::recursive_directory_iterator(path)) {
+                for (auto it = fs::recursive_directory_iterator(path);
+                     it != fs::recursive_directory_iterator(); ++it) {
+                    const auto& e = *it;
                     if (++visited>100000) throw std::runtime_error("dependency directory exceeds 100000 entries");
-                    if (fs::is_symlink(e.symlink_status())) {
-                        unresolved("dependency directory contains an unmodeled symlink: " + e.path().string());
+                    if (auditRedirect(e.path())) {
+                        it.disable_recursion_pending();
+                        unresolved("dependency directory contains an unmodeled symlink or reparse point: " + e.path().string());
                     } else if (e.is_regular_file()) entries.push_back(e.path());
                 }
                 std::sort(entries.begin(), entries.end());
@@ -281,7 +292,7 @@ bool verifyAuditSnapshot(const nlohmann::json& report, std::string& error) {
             std::size_t visited=0;
             for (const auto& e : fs::recursive_directory_iterator(root)) {
                 if (++visited>100000) throw std::runtime_error("dependency directory exceeds 100000 entries");
-                if (fs::is_symlink(e.symlink_status())) throw std::runtime_error("new dependency symlink: " + e.path().string());
+                if (auditRedirect(e.path())) throw std::runtime_error("new dependency symlink or reparse point: " + e.path().string());
                 if (e.is_regular_file()) entries.push_back(fs::relative(e.path(),root).generic_string());
             }
             std::sort(entries.begin(), entries.end());

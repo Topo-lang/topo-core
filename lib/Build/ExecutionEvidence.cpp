@@ -1,6 +1,7 @@
 #include "topo/Build/ExecutionEvidence.h"
 #include "topo/Distribution/Sha256.h"
 #include "topo/Platform/ToolResolution.h"
+#include "topo/Platform/TempFile.h"
 #include <algorithm>
 #include <cstdlib>
 
@@ -8,23 +9,63 @@ namespace topo::build::evidence {
 namespace fs = std::filesystem;
 
 namespace {
+bool unsupportedRedirect(const fs::path& path, std::string& error) {
+#ifdef _WIN32
+    std::error_code ec;
+    const auto absolute = fs::absolute(path, ec).lexically_normal();
+    if (ec) { error = "cannot resolve observed file path"; return true; }
+    auto component = absolute.root_path();
+    for (const auto& part : absolute.relative_path()) {
+        component /= part;
+        const bool redirected = platform::isPathRedirect(component, ec);
+        if (ec) { error = "cannot inspect observed path: " + component.string(); return true; }
+        if (redirected) {
+            error = "Windows reparse-point observation is unsupported: " + component.string();
+            return true;
+        }
+    }
+#else
+    (void)path; (void)error;
+#endif
+    return false;
+}
+
 std::vector<std::string> expandFiles(const std::vector<std::string>& paths, std::vector<std::string>& errors) {
     std::vector<std::string> files;
     size_t count = 0;
     for (const auto& path : paths) {
+        std::string error;
+        if (unsupportedRedirect(path, error)) { errors.push_back(error); continue; }
         std::error_code ec;
+        const bool redirected = platform::isPathRedirect(path, ec);
+        if (ec) { errors.push_back("cannot inspect observed path: " + path); continue; }
+        if (redirected && fs::is_directory(path, ec)) {
+            errors.push_back("observed path is a symlink directory: " + path);
+            continue;
+        }
         const auto status = fs::symlink_status(path, ec);
         if (!ec && fs::is_directory(status)) {
             fs::recursive_directory_iterator cursor(path, ec), end;
             for (; !ec && cursor != end; cursor.increment(ec)) {
                 if (++count > 100000) { errors.push_back("directory exceeds observation limit"); return files; }
-                auto type = cursor->symlink_status(ec);
-                if (ec) break;
-                if (fs::is_directory(type)) continue;
-                if (fs::is_symlink(type) && cursor->is_directory(ec)) {
+                const bool redirectedEntry = platform::isPathRedirect(cursor->path(), ec);
+                if (ec) { cursor.disable_recursion_pending(); break; }
+#ifdef _WIN32
+                if (redirectedEntry) {
+                    cursor.disable_recursion_pending();
+                    errors.push_back("Windows reparse-point observation is unsupported: " + cursor->path().string());
+                    continue;
+                }
+#else
+                if (redirectedEntry && cursor->is_directory(ec)) {
+                    cursor.disable_recursion_pending();
                     errors.push_back("observed directory contains a symlink directory: " + cursor->path().string());
                     continue;
                 }
+#endif
+                auto type = cursor->symlink_status(ec);
+                if (ec) break;
+                if (fs::is_directory(type)) continue;
                 files.push_back(cursor->path().string());
             }
             if (ec) errors.push_back("cannot enumerate observed directory: " + path);
@@ -40,17 +81,18 @@ ExecutionRecorder::ExecutionRecorder(RootMap roots, fs::path manifestPath, std::
     : roots_(std::move(roots)), manifestPath_(std::move(manifestPath)), producer_(std::move(producer)) {}
 
 bool ExecutionRecorder::snapshot(const std::string& path, FileEntry& entry, std::string& error) const {
+    if (unsupportedRedirect(path, error)) return false;
     std::error_code ec;
     auto absolute = fs::absolute(path, ec).lexically_normal();
     if (ec) { error = "cannot resolve observed file path"; return false; }
     // Normalize platform aliases such as /tmp -> /private/tmp, retaining the
     // final filename so snapshotFile still records a final symlink faithfully.
-    auto parent = fs::canonical(absolute.parent_path(), ec);
+    auto parent = platform::canonicalPath(absolute.parent_path(), ec);
     if (ec) { error = "cannot resolve observed file parent: " + path; return false; }
     absolute = parent / absolute.filename();
     std::vector<std::pair<std::string, fs::path>> candidates;
     for (const auto& [id, root] : roots_) {
-        auto canonical = fs::canonical(root, ec);
+        auto canonical = platform::canonicalPath(root, ec);
         if (!ec) candidates.emplace_back(id, canonical);
     }
     std::sort(candidates.begin(), candidates.end(), [](const auto& a, const auto& b) {

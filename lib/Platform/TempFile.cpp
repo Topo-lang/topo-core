@@ -57,6 +57,13 @@ bool createExclusive(const fs::path& p) {
 #endif
 }
 
+#ifdef _WIN32
+std::error_code lastPathError() {
+    const DWORD error = GetLastError();
+    return {static_cast<int>(error ? error : ERROR_GEN_FAILURE), std::system_category()};
+}
+#endif
+
 } // namespace
 
 fs::path tempDirectory() {
@@ -114,6 +121,76 @@ fs::path homeDirectory() {
 #else
     if (auto p = fromEnv("HOME"); !p.empty()) return p;
     return {};
+#endif
+}
+
+fs::path canonicalPath(const fs::path& path, std::error_code& error) {
+#ifdef _WIN32
+    error.clear();
+    const HANDLE handle = CreateFileW(path.c_str(), 0,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+        OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) {
+        error = lastPathError();
+        return {};
+    }
+    struct ClosePathHandle {
+        HANDLE value;
+        ~ClosePathHandle() { CloseHandle(value); }
+    } close{handle};
+
+    // Bound both allocation and retries if another process renames the opened
+    // target while Windows is reporting the required buffer length.
+    constexpr DWORD maxPathCharacters = 32768;
+    std::wstring resolved(256, L'\0');
+    for (unsigned attempt = 0; attempt < 4; ++attempt) {
+        const DWORD length = GetFinalPathNameByHandleW(handle, resolved.data(),
+            static_cast<DWORD>(resolved.size()), FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+        if (length == 0) {
+            error = lastPathError();
+            return {};
+        }
+        if (length > maxPathCharacters) {
+            error = {ERROR_FILENAME_EXCED_RANGE, std::system_category()};
+            return {};
+        }
+        if (length >= resolved.size()) {
+            // A short-buffer result already includes the terminating null.
+            resolved.resize(length);
+            continue;
+        }
+        resolved.resize(length);
+        if (resolved.compare(0, 8, L"\\\\?\\UNC\\") == 0) {
+            resolved.replace(0, 8, L"\\\\");
+        } else if (resolved.size() >= 7 && resolved.compare(0, 4, L"\\\\?\\") == 0 &&
+                   ((resolved[4] >= L'A' && resolved[4] <= L'Z') ||
+                    (resolved[4] >= L'a' && resolved[4] <= L'z')) &&
+                   resolved[5] == L':' && resolved[6] == L'\\') {
+            resolved.erase(0, 4);
+        }
+        return fs::path(std::move(resolved));
+    }
+    error = {ERROR_RETRY, std::system_category()};
+    return {};
+#else
+    return fs::canonical(path, error);
+#endif
+}
+
+bool isPathRedirect(const fs::path& path, std::error_code& error) {
+#ifdef _WIN32
+    const DWORD attributes = GetFileAttributesW(path.c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES) {
+        error = lastPathError();
+        return false;
+    }
+    error.clear();
+    return (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+#else
+    const auto status = fs::symlink_status(path, error);
+    if (!error && status.type() == fs::file_type::not_found)
+        error = std::make_error_code(std::errc::no_such_file_or_directory);
+    return !error && fs::is_symlink(status);
 #endif
 }
 

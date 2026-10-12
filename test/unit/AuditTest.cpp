@@ -3,11 +3,40 @@
 #include <gtest/gtest.h>
 #include <filesystem>
 #include <fstream>
+#include <system_error>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace {
 namespace fs = std::filesystem;
 using namespace topo::check;
 using json = nlohmann::json;
+
+std::error_code createAuditSymlink(const fs::path& target, const fs::path& link, bool directory = false) {
+#ifdef _WIN32
+    // Some MinGW standard libraries leave create_symlink unimplemented even
+    // when the host supports links. Create the real filesystem fixture via Win32.
+    constexpr DWORD allowUnprivilegedCreate = 0x2;
+    const DWORD kind = directory ? SYMBOLIC_LINK_FLAG_DIRECTORY : 0;
+    if (CreateSymbolicLinkW(link.c_str(), target.c_str(), kind | allowUnprivilegedCreate)) return {};
+    auto error = GetLastError();
+    if (error == ERROR_INVALID_PARAMETER || error == ERROR_PRIVILEGE_NOT_HELD) {
+        if (CreateSymbolicLinkW(link.c_str(), target.c_str(), kind)) return {};
+        error = GetLastError();
+    }
+    return {static_cast<int>(error), std::system_category()};
+#else
+    std::error_code error;
+    if (directory) fs::create_directory_symlink(target, link, error);
+    else fs::create_symlink(target, link, error);
+    return error;
+#endif
+}
 class AuditTest : public ::testing::Test {
 protected:
     topo::platform::TempFile marker{"audit-tests"};
@@ -24,7 +53,16 @@ protected:
             {"type-log","app::Log","class","","",(root/"Log.java").string(),1,"project",true},
             {"method-log","app::Log::log","method","()void","type-log",(root/"Log.java").string(),1,"project",true}};
     }
-    void TearDown() override { std::error_code ec; fs::remove_all(root,ec); }
+    void TearDown() override {
+#ifdef _WIN32
+        // Remove native fixture links before MinGW's recursive cleanup, which
+        // can misclassify a directory reparse point as an ordinary directory.
+        DeleteFileW((root / "selected.java").c_str());
+        RemoveDirectoryW((root / "dependency" / "alias").c_str());
+#endif
+        std::error_code ec;
+        fs::remove_all(root, ec);
+    }
     void write(const std::string& p,const std::string& bytes) { std::ofstream(root/p) << bytes; }
     json report(const std::vector<std::string>& external={}) {
         return makeAuditReport(root.string(),facts,policy,external,{(root/"Log.java").string()},{});
@@ -103,9 +141,33 @@ TEST_F(AuditTest, PolicyWideningCannotReuseEarlierApproval) {
     auto wide=report({"app::Log"}); applyAuditTrust(wide,trust); EXPECT_FALSE(wide["passed"].get<bool>());
 }
 TEST_F(AuditTest, SymlinkRetargetingInvalidatesSavedInputs) {
-    write("alternate.java","different"); fs::create_symlink(root/"Log.java",root/"selected.java"); facts.inputs.push_back((root/"selected.java").string());
-    auto r=report(); fs::remove(root/"selected.java"); fs::create_symlink(root/"alternate.java",root/"selected.java");
-    std::string error; EXPECT_FALSE(verifyAuditSnapshot(r,error));
+    // Equal bytes isolate the physical-target identity from content changes.
+    fs::copy_file(root / "Log.java", root / "alternate.java");
+    auto created = createAuditSymlink(root / "Log.java", root / "selected.java");
+    ASSERT_FALSE(created) << created.message();
+    facts.inputs.push_back((root / "selected.java").string());
+    auto r = report();
+    std::string error;
+    ASSERT_TRUE(verifyAuditSnapshot(r, error)) << error;
+    fs::remove(root / "selected.java");
+    created = createAuditSymlink(root / "alternate.java", root / "selected.java");
+    ASSERT_FALSE(created) << created.message();
+    EXPECT_FALSE(verifyAuditSnapshot(r, error));
+}
+TEST_F(AuditTest, DependencyDirectoryLinksRemainUnresolvedWithoutFollowing) {
+    fs::create_directory(root / "dependency");
+    fs::create_directory(root / "outside");
+    write("outside/Hidden.class", "not an approved dependency input");
+    auto created = createAuditSymlink(root / "outside", root / "dependency" / "alias", true);
+    ASSERT_FALSE(created) << created.message();
+    facts.dependencies.push_back({"library", (root / "dependency").string(), "1", "", false});
+    auto r = report();
+    EXPECT_FALSE(r["passed"].get<bool>());
+    EXPECT_FALSE(r["unresolved"].empty());
+    ASSERT_EQ(r["directories"].size(), 1u);
+    EXPECT_TRUE(r["directories"][0]["entries"].empty());
+    std::string error;
+    EXPECT_FALSE(verifyAuditSnapshot(r, error));
 }
 TEST_F(AuditTest, PhysicalInputFailureDoesNotHashAsEmpty) {
     facts.inputs.push_back((root/"missing").string()); EXPECT_THROW(report(),std::runtime_error);

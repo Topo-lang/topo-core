@@ -3,10 +3,34 @@
 #include <gtest/gtest.h>
 #include <chrono>
 #include <fstream>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace {
 namespace fs = std::filesystem;
 namespace ev = topo::build::evidence;
+
+void createObservedDirectoryLink(const fs::path& target, const fs::path& link, std::error_code& ec) {
+#ifdef _WIN32
+    if (CreateSymbolicLinkW(link.c_str(), target.c_str(), SYMBOLIC_LINK_FLAG_DIRECTORY | 0x2)) {
+        ec.clear(); return;
+    }
+    auto error = GetLastError();
+    if (error == ERROR_INVALID_PARAMETER || error == ERROR_PRIVILEGE_NOT_HELD) {
+        if (CreateSymbolicLinkW(link.c_str(), target.c_str(), SYMBOLIC_LINK_FLAG_DIRECTORY)) {
+            ec.clear(); return;
+        }
+        error = GetLastError();
+    }
+    ec = std::error_code(static_cast<int>(error), std::system_category());
+#else
+    fs::create_directory_symlink(target, link, ec);
+#endif
+}
 class ExecutionEvidenceTest : public ::testing::Test {
 protected:
     fs::path dir;
@@ -20,7 +44,15 @@ protected:
         cmake = topo::platform::findSpawnableOnPath("cmake");
         ASSERT_FALSE(cmake.empty());
     }
-    void TearDown() override { std::error_code ec; fs::remove_all(dir, ec); }
+    void TearDown() override {
+#ifdef _WIN32
+        const auto alias = dir / "outputs" / "alias";
+        const auto attributes = GetFileAttributesW(alias.c_str());
+        if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT))
+            RemoveDirectoryW(alias.c_str());
+#endif
+        std::error_code ec; fs::remove_all(dir, ec);
+    }
 };
 TEST_F(ExecutionEvidenceTest, ActualCommandAndDynamicDirectoryOutputsAreBound) {
     ev::ExecutionRecorder recorder({{"project", dir}}, dir / "evidence.json", "test");
@@ -47,13 +79,32 @@ TEST_F(ExecutionEvidenceTest, FailedCommandAndMissingOutputRemainObservedFailure
 }
 TEST_F(ExecutionEvidenceTest, DirectorySymlinkNeverExpandsOutsideApprovedInputs) {
     std::error_code ec;
-    fs::create_directory_symlink(dir / "inputs", dir / "outputs" / "alias", ec);
-    if (ec) GTEST_SKIP() << "symlink creation unavailable: " << ec.message();
-    ev::ExecutionRecorder recorder({{"project", dir}}, dir / "evidence.json", "test");
+    createObservedDirectoryLink(dir / "inputs", dir / "outputs" / "alias", ec);
+    ASSERT_FALSE(ec) << "native symlink fixture creation failed: " << ec.message();
+    ev::ExecutionRecorder recorder({{"project", dir / "outputs"}}, dir / "evidence.json", "test");
     ASSERT_EQ(recorder.run("noop", cmake, {"-E", "true"}, {}, {(dir / "outputs").string()}).exitCode, 0);
+    ASSERT_EQ(recorder.manifest().nodes.size(), 1u);
     EXPECT_TRUE(recorder.manifest().nodes.front().outputs.empty());
+    EXPECT_FALSE(recorder.manifest().nodes.front().complete);
     ASSERT_FALSE(recorder.diagnostics().empty());
+#ifdef _WIN32
+    EXPECT_NE(recorder.diagnostics().front().find("reparse-point observation is unsupported"), std::string::npos);
+#else
     EXPECT_NE(recorder.diagnostics().front().find("symlink directory"), std::string::npos);
+#endif
+}
+TEST_F(ExecutionEvidenceTest, ExplicitDirectoryLinkAndDescendantStayOutsideApprovedRoot) {
+    const auto alias = dir / "outputs" / "alias";
+    std::error_code ec; createObservedDirectoryLink(dir / "inputs", alias, ec);
+    ASSERT_FALSE(ec) << "native symlink fixture creation failed: " << ec.message();
+    ev::ExecutionRecorder recorder({{"project", dir / "outputs"}}, dir / "evidence.json", "test");
+    ASSERT_EQ(recorder.run("noop", cmake, {"-E", "true"}, {},
+        {alias.string(), (alias / "one").string()}).exitCode, 0);
+    auto manifest = recorder.manifest(); ASSERT_EQ(manifest.nodes.size(), 1u);
+    EXPECT_TRUE(manifest.nodes.front().outputs.empty());
+    EXPECT_FALSE(manifest.nodes.front().complete);
+    EXPECT_FALSE(recorder.diagnostics().empty());
+    EXPECT_FALSE(ev::verifyManifest(manifest, {{"project", dir / "outputs"}}).buildEvidence);
 }
 TEST_F(ExecutionEvidenceTest, CompletedCommandsKeepTheirParentObservation) {
     ev::ExecutionRecorder recorder({{"project", dir}}, dir / "evidence.json", "test");

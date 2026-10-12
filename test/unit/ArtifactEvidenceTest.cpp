@@ -4,10 +4,33 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace {
 namespace ev = topo::build::evidence;
 namespace fs = std::filesystem;
+
+void createEvidenceLink(const fs::path& target, const fs::path& link, bool directory, std::error_code& ec) {
+#ifdef _WIN32
+    // Exercise native reparse points even when MinGW filesystem returns ENOSYS.
+    const DWORD kind = directory ? SYMBOLIC_LINK_FLAG_DIRECTORY : 0;
+    if (CreateSymbolicLinkW(link.c_str(), target.c_str(), kind | 0x2)) { ec.clear(); return; }
+    auto error = GetLastError();
+    if (error == ERROR_INVALID_PARAMETER || error == ERROR_PRIVILEGE_NOT_HELD) {
+        if (CreateSymbolicLinkW(link.c_str(), target.c_str(), kind)) { ec.clear(); return; }
+        error = GetLastError();
+    }
+    ec = std::error_code(static_cast<int>(error), std::system_category());
+#else
+    if (directory) fs::create_directory_symlink(target, link, ec);
+    else fs::create_symlink(target, link, ec);
+#endif
+}
 
 class ArtifactEvidenceTest : public ::testing::Test {
 protected:
@@ -19,7 +42,20 @@ protected:
         write("output.bin", "frozen output");
         write("facts.json", "{\"passed\":true,\"coverage\":\"limited\"}");
     }
-    void TearDown() override { std::error_code ec; fs::remove_all(dir, ec); }
+    void TearDown() override {
+#ifdef _WIN32
+        // Remove native links without relying on MinGW's symlink classification.
+        for (const auto* name : {"link", "escape", "cycle", "same.bin", "alias"}) {
+            const auto path = dir / name;
+            const auto attributes = GetFileAttributesW(path.c_str());
+            if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT)) {
+                if (attributes & FILE_ATTRIBUTE_DIRECTORY) RemoveDirectoryW(path.c_str());
+                else DeleteFileW(path.c_str());
+            }
+        }
+#endif
+        std::error_code ec; fs::remove_all(dir, ec);
+    }
     void write(const std::string& path, const std::string& data) {
         fs::create_directories((dir / path).parent_path());
         std::ofstream out(dir / path, std::ios::binary); out << data;
@@ -118,25 +154,47 @@ TEST_F(ArtifactEvidenceTest, MissingDirectoryAndUnreadableKindsNeverHashAsEmptyC
     EXPECT_TRUE(topo::dist::sha256File((dir / "missing").string()).empty());
 }
 
-TEST_F(ArtifactEvidenceTest, SymlinkTargetIdentityAndTextAreVerified) {
-    std::error_code ec; fs::create_symlink("output.bin", dir / "link", ec);
-    if (ec) GTEST_SKIP() << "symlink creation unavailable: " << ec.message();
+TEST_F(ArtifactEvidenceTest, SymlinkTargetsFollowPlatformIdentitySupport) {
+    std::error_code ec; createEvidenceLink("output.bin", dir / "link", false, ec);
+    ASSERT_FALSE(ec) << "native symlink fixture creation failed: " << ec.message();
+#ifdef _WIN32
+    ev::FileEntry out; std::string error;
+    EXPECT_FALSE(ev::snapshotFile(dir, "project", "link", out, error));
+    EXPECT_NE(error.find("reparse-point evidence identity is unsupported"), std::string::npos);
+#else
     auto f = file("link"); EXPECT_EQ(f.kind, "symlink"); EXPECT_EQ(f.resolvedPath, "output.bin");
     write("same.bin", "frozen output"); fs::remove(dir / "link"); fs::create_symlink("same.bin", dir / "link");
     std::string error; EXPECT_FALSE(ev::verifyFile(f, roots(), error));
+#endif
 }
 
 TEST_F(ArtifactEvidenceTest, EscapingCyclicAndIntermediateSymlinksAreRejected) {
-    std::error_code ec; fs::create_symlink("../outside", dir / "escape", ec);
-    if (ec) GTEST_SKIP() << "symlink creation unavailable: " << ec.message();
+    std::error_code ec; createEvidenceLink("../outside", dir / "escape", false, ec);
+    ASSERT_FALSE(ec) << "native symlink fixture creation failed: " << ec.message();
     ev::FileEntry out; std::string error;
     EXPECT_FALSE(ev::snapshotFile(dir, "project", "escape", out, error));
-    fs::create_symlink("cycle", dir / "cycle");
+    createEvidenceLink("cycle", dir / "cycle", false, ec);
+    ASSERT_FALSE(ec) << ec.message();
     EXPECT_FALSE(ev::snapshotFile(dir, "project", "cycle", out, error));
     fs::create_directory(dir / "nested"); write("nested/data", "data");
-    fs::create_directory_symlink("nested", dir / "alias");
+    createEvidenceLink("nested", dir / "alias", true, ec);
+    ASSERT_FALSE(ec) << ec.message();
     EXPECT_FALSE(ev::snapshotFile(dir, "project", "alias/data", out, error));
+    EXPECT_NE(error.find("intermediate symlink/reparse point"), std::string::npos);
 }
+
+#ifdef _WIN32
+TEST_F(ArtifactEvidenceTest, NativeReparsePointCannotReplaceAnOrdinaryFileIdentity) {
+    write("same.bin", "frozen output");
+    auto ordinary = file("same.bin");
+    ASSERT_TRUE(fs::remove(dir / "same.bin"));
+    std::error_code ec; createEvidenceLink("output.bin", dir / "same.bin", false, ec);
+    ASSERT_FALSE(ec) << "native symlink fixture creation failed: " << ec.message();
+    std::string error;
+    EXPECT_FALSE(ev::verifyFile(ordinary, roots(), error));
+    EXPECT_NE(error.find("reparse-point evidence identity is unsupported"), std::string::npos);
+}
+#endif
 
 TEST_F(ArtifactEvidenceTest, ExecutablePermissionIsPartOfIdentity) {
 #ifdef _WIN32
