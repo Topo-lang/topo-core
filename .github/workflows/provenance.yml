@@ -61,7 +61,7 @@ jobs:
           chmod a-w release-candidate/*
       - name: Upload immutable candidate for this run and attempt
         id: upload
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: topo-core-candidate-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           path: release-candidate/
@@ -125,7 +125,7 @@ jobs:
           gh attestation trusted-root > "$RUNNER_TEMP/candidate/trusted-root.json"
       - name: Upload signed candidate for independent verification
         id: upload
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: topo-core-signed-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           path: ${{ runner.temp }}/candidate/
@@ -166,7 +166,7 @@ jobs:
             "$RUNNER_TEMP/signed" control "$RUNNER_TEMP/verification-trusted-root.json" \
             "$RUNNER_TEMP/verification.json"
       - name: Save independent verification result
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: topo-core-verification-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           path: ${{ runner.temp }}/verification.json
