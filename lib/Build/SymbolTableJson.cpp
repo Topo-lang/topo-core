@@ -296,6 +296,11 @@ void to_json(json& j, const FunctionSymbol& s) {
     if (s.isConst) j["isConst"] = true;
     if (s.isStatic) j["isStatic"] = true;
     if (s.isExternal) j["isExternal"] = true;
+    if (s.isComptime) j["isComptime"] = true;
+    if (s.explicitlyExternal) j["explicitlyExternal"] = true;
+    if (!s.owningType.empty()) j["owningType"] = s.owningType;
+    if (!s.externalOwner.empty()) j["externalOwner"] = s.externalOwner;
+    if (s.kind != FunctionSymbol::Kind::Function) j["functionKind"] = static_cast<int>(s.kind);
     if (s.hasLogicBlock) j["hasLogicBlock"] = true;
     if (s.isMultiReturn) {
         j["isMultiReturn"] = true;
@@ -336,6 +341,15 @@ void from_json(const json& j, FunctionSymbol& s) {
     s.isConst = j.value("isConst", false);
     s.isStatic = j.value("isStatic", false);
     s.isExternal = j.value("isExternal", false);
+    s.isComptime = j.value("isComptime", false);
+    s.owningType = j.value("owningType", "");
+    s.externalOwner = j.value("externalOwner", "");
+    // Legacy function-only payloads record their effective flag as explicit.
+    s.explicitlyExternal = j.value("explicitlyExternal", s.isExternal && s.externalOwner.empty());
+    const int kind = j.value("functionKind", 0);
+    if (kind < 0 || kind > static_cast<int>(FunctionSymbol::Kind::Operator))
+        throw json::out_of_range::create(401, "invalid functionKind", &j);
+    s.kind = static_cast<FunctionSymbol::Kind>(kind);
     s.hasLogicBlock = j.value("hasLogicBlock", false);
     s.isMultiReturn = j.value("isMultiReturn", false);
     if (j.contains("returnParams")) j["returnParams"].get_to(s.returnParams);
@@ -359,12 +373,18 @@ void from_json(const json& j, FunctionSymbol& s) {
 
 void to_json(json& j, const MemberVarSymbol& s) {
     j = json::object();
+    if (!s.owningType.empty()) j["owningType"] = s.owningType;
+    if (s.isExternal) j["isExternal"] = true;
+    if (!s.externalOwner.empty()) j["externalOwner"] = s.externalOwner;
     j["name"] = s.name;
     j["type"] = s.type;
     if (s.isStatic) j["isStatic"] = true;
 }
 
 void from_json(const json& j, MemberVarSymbol& s) {
+    s.owningType = j.value("owningType", "");
+    s.isExternal = j.value("isExternal", false);
+    s.externalOwner = j.value("externalOwner", "");
     j.at("name").get_to(s.name);
     j.at("type").get_to(s.type);
     s.isStatic = j.value("isStatic", false);
@@ -372,6 +392,18 @@ void from_json(const json& j, MemberVarSymbol& s) {
 
 void to_json(json& j, const ClassSymbol& s) {
     j = json::object();
+    if (s.isExternal) j["isExternal"] = true;
+    if (s.isComptime) j["isComptime"] = true;
+    if (s.explicitlyExternal) j["explicitlyExternal"] = true;
+    if (!s.externalOwner.empty()) j["externalOwner"] = s.externalOwner;
+    if (!s.enclosingType.empty()) j["enclosingType"] = s.enclosingType;
+    for (const auto& op : s.operatorOverloads) {
+        json entry = {{"op", static_cast<int>(op.op)}, {"params", op.params},
+                      {"returnType", op.returnType}, {"isExternal", op.isExternal},
+                      {"owningType", op.owningType}, {"externalOwner", op.externalOwner}};
+        if (op.bindingTarget) entry["bindingTarget"] = *op.bindingTarget;
+        j["operatorOverloads"].push_back(std::move(entry));
+    }
     j["qualifiedName"] = s.qualifiedName;
     j["simpleName"] = s.simpleName;
     j["visibility"] = s.visibility;
@@ -384,6 +416,28 @@ void to_json(json& j, const ClassSymbol& s) {
 }
 
 void from_json(const json& j, ClassSymbol& s) {
+    s.isExternal = j.value("isExternal", false);
+    s.isComptime = j.value("isComptime", false);
+    s.explicitlyExternal = j.value("explicitlyExternal", false);
+    s.externalOwner = j.value("externalOwner", "");
+    s.enclosingType = j.value("enclosingType", "");
+    s.operatorOverloads.clear();
+    if (j.contains("operatorOverloads")) {
+        for (const auto& entry : j.at("operatorOverloads")) {
+            OperatorSymbol op;
+            const int kind = entry.at("op").get<int>();
+            if (kind < 0 || kind > static_cast<int>(OverloadableOp::FatArrow))
+                throw json::out_of_range::create(401, "invalid operator kind", &entry);
+            op.op = static_cast<OverloadableOp>(kind);
+            entry.at("params").get_to(op.params);
+            entry.at("returnType").get_to(op.returnType);
+            if (entry.contains("bindingTarget")) op.bindingTarget = entry.at("bindingTarget").get<std::string>();
+            op.isExternal = entry.value("isExternal", false);
+            op.owningType = entry.value("owningType", "");
+            op.externalOwner = entry.value("externalOwner", "");
+            s.operatorOverloads.push_back(std::move(op));
+        }
+    }
     j.at("qualifiedName").get_to(s.qualifiedName);
     j.at("simpleName").get_to(s.simpleName);
     j.at("visibility").get_to(s.visibility);

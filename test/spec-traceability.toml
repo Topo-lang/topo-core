@@ -315,6 +315,9 @@
 
 "08.6_external_fn"              = ["spec/containment/valid/basic_external.topo"]
 "08.6_external_multiple"        = ["spec/containment/valid/external_multiple.topo"]
+"08.6_external_type"            = ["spec/containment/valid/external_type.topo", "spec/containment/valid/external_template_type.topo"]
+"08.6_external_type_comptime"   = ["spec/containment/invalid/external_type_comptime_member.topo"]
+"08.6_external_invalid_target"  = ["spec/containment/invalid/external_on_constraint.topo", "spec/containment/invalid/external_on_constructor.topo"]
 "08.6_external_comptime_mutual" = ["spec/containment/invalid/external_comptime_conflict.topo"]
 
 

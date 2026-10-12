@@ -1,4 +1,5 @@
 #include "topo/Distribution/BackendCli.h"
+#include "topo/Distribution/EvidenceCli.h"
 
 #include "topo/Distribution/BackendCache.h"
 #include "topo/Distribution/BackendManifest.h"
@@ -189,6 +190,7 @@ struct Options {
     std::string platformTriple;
     std::string cacheRoot;
     std::string outputDir;
+    std::string evidence, identityPolicy, bundle;
     bool installedFlag = false;
     bool availableFlag = false;
     bool requireSignature = false;
@@ -208,7 +210,10 @@ Options parseOptions(const std::vector<std::string>& args, std::size_t startAt) 
             }
             return args[++i];
         };
-        if (a == "--from") {
+        if (a == "--evidence") o.evidence=needValue("--evidence");
+        else if (a == "--identity-policy") o.identityPolicy=needValue("--identity-policy");
+        else if (a == "--bundle") o.bundle=needValue("--bundle");
+        else if (a == "--from") {
             o.fromDir = needValue("--from");
         } else if (a == "--platform") {
             o.platformTriple = needValue("--platform");
@@ -633,6 +638,7 @@ void printBackendUsage() {
         "  remove    <name>[@<ver>] [--yes]           Remove a cached backend\n"
         "  default   <name>[@<ver>]                   Set the default version\n"
         "  update    [<name>]                         Check for newer versions\n"
+        "  verify-provenance <name>[@<ver>] --evidence <file>  Verify installed bytes\n"
         "  pack      <name>[@<ver>] -o <dir>          Build a portable offline package\n"
         "\n"
         "Options:\n"
@@ -642,6 +648,7 @@ void printBackendUsage() {
         "  -o, --output <dir>    Output directory (pack)\n"
         "  --installed           list: show the local cache (default)\n"
         "  --available           list: show the registry index\n"
+        "  --evidence <file> --identity-policy <file> --bundle <file>  Detached provenance\n"
         "  --require-signature   install: refuse packages without a verified signature\n"
         "  -y, --yes             Skip confirmation prompts\n"
         "\n"
@@ -663,6 +670,24 @@ int runBackendCli(const std::vector<std::string>& args) {
         return kUsageError;
     }
 
+    if (sub == "verify-provenance") {
+        if (o.positionals.size()!=1 || o.evidence.empty()) {
+            std::cerr << "error: verify-provenance requires name@version and --evidence FILE\n"; return kUsageError;
+        }
+        auto [name,version]=splitNameVersion(o.positionals[0]);
+        auto cache=makeCache(o);
+        if (version.empty()) version=cache.defaultVersion(name);
+        for (const auto& installed : cache.versionsOf(name)) if (installed.version==version) {
+            if (installed.manifest.backend.name!=name || installed.manifest.backend.version!=version) {
+                std::cerr << "error: installed backend manifest differs from selected identity\n"; return kCacheError;
+            }
+            std::vector<std::string> command={"verify","--manifest",o.evidence,"--root","payload="+installed.path};
+            if (!o.identityPolicy.empty()) { command.push_back("--policy"); command.push_back(o.identityPolicy); }
+            if (!o.bundle.empty()) { command.push_back("--bundle"); command.push_back(o.bundle); }
+            return runEvidenceCli(command);
+        }
+        std::cerr << "error: selected backend is not installed\n"; return kCacheError;
+    }
     if (sub == "list") return cmdList(o);
     if (sub == "install") return cmdInstall(o);
     if (sub == "remove") return cmdRemove(o);

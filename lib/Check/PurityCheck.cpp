@@ -49,6 +49,28 @@ void checkPurity(const SymbolTable& symbols,
 
     if (parallelFunctions.empty()) return;
 
+    // An external body is reviewed by a human, not evidence of purity. Reject
+    // its participation even if skipped extraction produced no global writes.
+    for (const auto& callee : parallelFunctions) {
+        bool external = false;
+        if (const auto* fn = symbols.findFunction(callee)) external = fn->isExternal;
+        else {
+            // Bare call names are allowed by fn-block syntax. Be conservative
+            // if any matching declaration is external, rather than picking one.
+            for (const auto& [name, fn] : symbols.functions()) {
+                if (fn.simpleName == callee && fn.isExternal) external = true;
+            }
+        }
+        external = external || symbols.externalTypeForMember(callee);
+        if (!external) continue;
+        CheckDiagnostic d;
+        d.severity = Severity::Error;
+        d.check = "purity";
+        d.message = "external function '" + callee +
+                    "' in a parallel stage has unverified effects; external is not a purity contract";
+        result.addDiagnostic(std::move(d));
+    }
+
     // Analysis-boundary disclosure. PurityCheck verifies DIRECT global
     // reads/writes by parallel-stage functions only: it does not do
     // transitive call-graph taint propagation (a global write performed

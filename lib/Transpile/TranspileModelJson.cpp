@@ -1001,6 +1001,8 @@ void from_json(const json& j, TranspileField& f) {
 void to_json(json& j, const TranspileType& t) {
     j = json::object();
     j["qualifiedName"] = t.qualifiedName;
+    if (t.isExternal) j["isExternal"] = true;
+    if (!t.externalOwner.empty()) j["externalOwner"] = t.externalOwner;
     j["fields"] = t.fields;
     // Omit when empty (mirrors the throwsClause / unsupported idiom): keeps
     // pre-inheritance JSON byte-identical and lets old payloads round-trip.
@@ -1035,6 +1037,8 @@ void to_json(json& j, const TranspileType& t) {
 }
 
 void from_json(const json& j, TranspileType& t) {
+    t.isExternal = j.value("isExternal", false);
+    t.externalOwner = j.value("externalOwner", "");
     j.at("qualifiedName").get_to(t.qualifiedName);
     j.at("fields").get_to(t.fields);
     t.baseClasses.clear();
@@ -1066,6 +1070,9 @@ void from_json(const json& j, TranspileType& t) {
 void to_json(json& j, const TranspileFunction& f) {
     j = json::object();
     j["qualifiedName"] = f.qualifiedName;
+    if (f.isExternal) j["isExternal"] = true;
+    if (!f.owningType.empty()) j["owningType"] = f.owningType;
+    if (!f.externalOwner.empty()) j["externalOwner"] = f.externalOwner;
     json rty;
     detail::typeNodeToJson(rty, f.returnType);
     j["returnType"] = std::move(rty);
@@ -1106,6 +1113,9 @@ void to_json(json& j, const TranspileFunction& f) {
 }
 
 void from_json(const json& j, TranspileFunction& f) {
+    f.isExternal = j.value("isExternal", false);
+    f.owningType = j.value("owningType", "");
+    f.externalOwner = j.value("externalOwner", "");
     j.at("qualifiedName").get_to(f.qualifiedName);
     detail::typeNodeFromJson(j.at("returnType"), f.returnType);
 

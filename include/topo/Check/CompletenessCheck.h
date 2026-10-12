@@ -17,6 +17,9 @@ struct CompletenessConfig {
     bool ignoreDestructors = false;
     bool ignoreMain = true;
     std::vector<std::string> ignorePatterns; // glob patterns, e.g. "test::*"
+    // Exact host paths already selected and identity-checked by the audit service.
+    // Suppress undeclared implementation findings while retaining reverse lookup.
+    std::vector<std::string> manualFiles;
 };
 
 /// Run completeness check: compare host symbols against .topo declarations.

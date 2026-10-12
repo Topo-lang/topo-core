@@ -743,7 +743,9 @@ ASTNodePtr Parser::parseMemberDecl() {
 
     // template<...> -> TemplateDecl wrapping function or type
     if (check(TokenKind::KW_template)) {
-        return parseTemplateDecl();
+        auto result = parseTemplateDecl();
+        if (result) result->modifiers.insert(result->modifiers.begin(), mods.begin(), mods.end());
+        return result;
     }
 
     // type -> TypeDecl
@@ -2019,6 +2021,20 @@ ASTNodePtr Parser::parseTypeDecl() {
 
 ASTNodePtr Parser::parseTypeMember(const std::string& typeName) {
     SourceLocation loc = current_.location;
+
+    // Preserve boundary/comptime modifiers without duplicating the special
+    // constructor/destructor/operator grammar below.
+    if (check(TokenKind::KW_external) || check(TokenKind::KW_comptime)) {
+        auto modifier = advance();
+        auto member = parseTypeMember(typeName);
+        if (member) member->modifiers.insert(member->modifiers.begin(),
+            {modifier.is(TokenKind::KW_external) ? ModifierData::External : ModifierData::Comptime,
+             modifier.location, {}});
+        return member;
+    }
+    if (check(TokenKind::KW_type) || check(TokenKind::KW_class) || check(TokenKind::KW_template)) {
+        return parseMemberDecl();
+    }
 
     // virtual keyword → prohibition error
     if (check(TokenKind::KW_virtual)) {

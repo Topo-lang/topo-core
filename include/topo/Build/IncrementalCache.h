@@ -1,6 +1,8 @@
 #ifndef TOPO_BUILD_INCREMENTALCACHE_H
 #define TOPO_BUILD_INCREMENTALCACHE_H
 
+#include "topo/Build/ArtifactEvidence.h"
+
 #include "topo/Sema/VisibilityCollector.h"
 #include "topo/Sema/SymbolTable.h"
 
@@ -64,6 +66,18 @@ public:
 
     bool saveVisibilityEntries(const std::vector<VisibilityEntry>& v) const;
     bool loadVisibilityEntries(std::vector<VisibilityEntry>& v) const;
+
+    /// Optional content evidence, separate from the ordinary v3 mtime cache.
+    /// Missing legacy evidence is a strict-mode miss; normal caching is unchanged.
+    bool saveEvidenceManifest(const evidence::Manifest& manifest, std::string& error) const;
+    bool loadEvidenceManifest(evidence::Manifest& manifest, std::string& error) const;
+    /// Verify all recorded files and require one root with the expected action,
+    /// including when the evidence declares incomplete coverage. Integrity and
+    /// completeness describe the recorded content; they never establish a
+    /// trusted producer or authorize build reuse. Strict reuse additionally
+    /// requires independently verified input closure and producer provenance.
+    evidence::VerificationResult verifyEvidence(const evidence::Action& expected,
+                                               const evidence::RootMap& roots) const;
 
     // --- Config fingerprint ---
 

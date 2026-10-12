@@ -38,6 +38,13 @@ struct FunctionSymbol {
     AccessPattern accessPattern = AccessPattern::None;
     int tiledSize = 0;
     bool isExternal = false;
+    // isExternal is the effective boundary used by all consumers. Keep its
+    // origin separate: a type authorizes its own members, never its callers.
+    bool explicitlyExternal = false;
+    std::string owningType;
+    std::string externalOwner; // declaring external type, empty for function-only external
+    enum class Kind { Function, Constructor, Destructor, Operator } kind = Kind::Function;
+    bool isComptime = false;
 };
 
 struct MemberVarSymbol {
@@ -45,6 +52,9 @@ struct MemberVarSymbol {
     TypeNode type;
     bool isStatic = false;
     SourceLocation location;
+    std::string owningType;
+    bool isExternal = false; // includes initialization belonging to this field
+    std::string externalOwner;
 };
 
 struct OperatorSymbol {
@@ -53,6 +63,9 @@ struct OperatorSymbol {
     TypeNode returnType;
     std::optional<std::string> bindingTarget;
     SourceLocation location;
+    bool isExternal = false;
+    std::string owningType;
+    std::string externalOwner;
 };
 
 struct ClassSymbol {
@@ -67,6 +80,11 @@ struct ClassSymbol {
     std::vector<MemberVarSymbol> memberVars;
     std::vector<TemplateParamDecl> templateParams; // class templates
     std::vector<OperatorSymbol> operatorOverloads;
+    bool isExternal = false;
+    bool explicitlyExternal = false;
+    std::string externalOwner; // own name or the lexical external ancestor
+    std::string enclosingType; // lexical ownership, distinct from baseClass
+    bool isComptime = false;
 };
 
 struct ConstraintSymbol {
@@ -185,6 +203,15 @@ public:
     const LogicBlockEntry* findLogicBlock(const std::string& qualifiedName) const;
     const ClassSymbol* findClassSymbol(const std::string& qualifiedName) const;
     const ClassSymbol* findClassBySimpleName(const std::string& simpleName) const;
+    // Query a qualified member's exact lexical owner (including opaque private
+    // members and implicit initialization). Does not follow inheritance, type
+    // aliases, field types, or simple-name fallbacks. Host binding must establish
+    // that the supplied qualified name really belongs to that type.
+    const ClassSymbol* externalTypeForMember(const std::string& qualifiedName) const;
+    // Apply an already resolved policy boundary to an exact declared type.
+    // Returns false without mutation when absent or conflicting with comptime.
+    // Explicit declaration provenance is preserved; callers validate host identity.
+    bool markExternalType(const std::string& qualifiedName);
     const ConstraintSymbol* findConstraintSymbol(const std::string& name) const;
 
     const std::unordered_map<std::string, FunctionSymbol>& functions() const { return functions_; }

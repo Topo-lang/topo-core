@@ -1,0 +1,17 @@
+// TEST: external-type-whole-boundary
+namespace app {
+public:
+  external type Log {
+  public:
+    Log();
+    ~Log();
+    void write();
+    static i64 count;
+    fn operator+(Log left, Log right) -> Log;
+  private:
+    void helper();
+    type Sink { public: void emit(); }
+  }
+  type Derived : public Log { public: void write(); }
+  void write();
+}

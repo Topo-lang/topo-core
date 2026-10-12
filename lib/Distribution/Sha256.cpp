@@ -1,5 +1,7 @@
 #include "topo/Distribution/Sha256.h"
 
+#include <filesystem>
+
 #include <array>
 #include <cstdio>
 #include <cstring>
@@ -145,15 +147,26 @@ std::string sha256Hex(const std::string& s) {
 }
 
 std::string sha256File(const std::string& path) {
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(path, ec) || ec) return "";
+    const auto expectedBytes = std::filesystem::file_size(path, ec);
+    if (ec) return "";
     std::ifstream in(path, std::ios::binary);
     if (!in) return "";
     Sha256 h;
     char buf[8192];
+    std::uintmax_t totalBytes = 0;
     while (in) {
         in.read(buf, sizeof(buf));
         std::streamsize got = in.gcount();
-        if (got > 0) h.update(buf, static_cast<std::size_t>(got));
+        if (got > 0) {
+            h.update(buf, static_cast<std::size_t>(got));
+            totalBytes += static_cast<std::uintmax_t>(got);
+        }
     }
+    // A directory, device or interrupted read must never become the digest of
+    // a successfully read prefix. Callers use an empty digest as I/O failure.
+    if (in.bad() || !in.eof() || totalBytes != expectedBytes) return "";
     return h.hexDigest();
 }
 

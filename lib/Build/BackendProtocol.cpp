@@ -1,4 +1,5 @@
 #include "topo/Build/BackendProtocol.h"
+#include <algorithm>
 #include "topo/Build/SymbolTableJson.h"
 #include "topo/Lang/LanguagePlugin.h"
 #include "topo/Lang/BuildDriverFactory.h"
@@ -388,6 +389,16 @@ backend::BackendConfig deserializeBackendConfig(const json& j) {
 
 std::string serializeBackendRequest(const BackendRequest& req) {
     json j = json::object();
+    if (!req.checkModelPath.empty()) {
+        j["checkModelPath"] = req.checkModelPath;
+        j["checkModelSha256"] = req.checkModelSha256;
+    }
+    if (!req.evidence.mode.empty()) {
+        j["evidence"] = {{"protocolVersion", req.evidence.protocolVersion},
+                         {"mode", req.evidence.mode}, {"manifestPath", req.evidence.manifestPath},
+                         {"compilerSha256", req.evidence.compilerSha256},
+                         {"linkerPath", req.evidence.linkerPath}, {"linkerSha256", req.evidence.linkerSha256}};
+    }
     j["config"] = serializeBackendConfig(req.config);
     j["outputPath"] = req.outputPath;
     j["topoMetadata"] = serializeSymbolTable(req.symbolTable);
@@ -416,6 +427,32 @@ std::string serializeBackendRequest(const BackendRequest& req) {
 bool deserializeBackendRequest(const std::string& jsonStr, BackendRequest& req) {
     try {
         json j = json::parse(jsonStr);
+        req.checkModelPath = j.value("checkModelPath", std::string());
+        req.checkModelSha256 = j.value("checkModelSha256", std::string());
+        if (req.checkModelPath.find('\0') != std::string::npos) return false;
+
+        req.evidence = {};
+        if (j.contains("evidence")) {
+            const auto& e = j.at("evidence");
+            if (!e.is_object() || !e.contains("protocolVersion") ||
+                !e.at("protocolVersion").is_number_integer() || !e.contains("mode") ||
+                !e.contains("manifestPath")) return false;
+            for (const auto& item : e.items())
+                if (item.key() != "protocolVersion" && item.key() != "mode" && item.key() != "manifestPath" &&
+                    item.key() != "compilerSha256" && item.key() != "linkerPath" && item.key() != "linkerSha256")
+                    return false;
+            req.evidence.protocolVersion = e.at("protocolVersion").get<int>();
+            req.evidence.mode = e.at("mode").get<std::string>();
+            req.evidence.manifestPath = e.at("manifestPath").get<std::string>();
+            req.evidence.compilerSha256 = e.value("compilerSha256", std::string());
+            req.evidence.linkerPath = e.value("linkerPath", std::string());
+            req.evidence.linkerSha256 = e.value("linkerSha256", std::string());
+            if (req.evidence.linkerPath.find('\0') != std::string::npos) return false;
+            if (req.evidence.protocolVersion != 1 ||
+                (req.evidence.mode != "commands" && req.evidence.mode != "isolated-build") ||
+                req.evidence.manifestPath.empty() || req.evidence.manifestPath.find('\0') != std::string::npos)
+                return false;
+        }
 
         req.config = deserializeBackendConfig(j.at("config"));
         req.outputPath = j.at("outputPath").get<std::string>();
@@ -474,6 +511,22 @@ bool deserializeBackendRequest(const std::string& jsonStr, BackendRequest& req) 
     } catch (const json::exception&) {
         return false;
     }
+}
+
+bool validateEvidenceCapability(const BackendRequest& req,
+                                const std::vector<std::string>& supportedModes,
+                                std::string& error) {
+    error.clear();
+    if (req.evidence.mode.empty()) return true;
+    if (req.evidence.protocolVersion != 1 || req.evidence.manifestPath.empty()) {
+        error = "unsupported or incomplete backend evidence protocol";
+        return false;
+    }
+    if (std::find(supportedModes.begin(), supportedModes.end(), req.evidence.mode) == supportedModes.end()) {
+        error = "backend does not support requested evidence mode: " + req.evidence.mode;
+        return false;
+    }
+    return true;
 }
 
 std::string backendToolName(HostLanguage language) {

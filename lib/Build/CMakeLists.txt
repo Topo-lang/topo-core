@@ -8,6 +8,7 @@ target_include_directories(TopoBuildConfig INTERFACE
 
 # TopoBuildLib: build-infrastructure library (Config, Protocol, Cache, etc.)
 add_library(TopoBuildLib
+    ExecutionEvidence.cpp
     BackendProtocol.cpp
     ConfigValidator.cpp
     IncrementalCache.cpp
@@ -23,6 +24,7 @@ target_include_directories(TopoBuildLib PUBLIC
 target_link_libraries(TopoBuildLib
     PUBLIC TopoPlatform TopoSema topo::lang::TopoLang
     PUBLIC nlohmann_json::nlohmann_json
+    PUBLIC TopoDistribution
 )
 topo_set_compiler_flags(TopoBuildLib)
 

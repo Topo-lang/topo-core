@@ -242,7 +242,7 @@ struct ModifierData {
         Lifetime,    // lifetime declaration
         Priority,    // args[0] = level name
         Comptime,    // comptime modifier
-        External,    // external modifier (boundary function)
+        External,    // external modifier (boundary function or whole type)
         TypeFn,      // typefn modifier
         Instantiate, // instantiate directive
 

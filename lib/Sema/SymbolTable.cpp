@@ -60,6 +60,54 @@ const ClassSymbol* SymbolTable::findClassBySimpleName(const std::string& simpleN
     return nullptr;
 }
 
+const ClassSymbol* SymbolTable::externalTypeForMember(const std::string& qualifiedName) const {
+    if (const auto* fn = findFunction(qualifiedName); fn && !fn->owningType.empty()) {
+        const auto* owner = findClassSymbol(fn->owningType);
+        return owner && owner->isExternal ? owner : nullptr;
+    }
+    const auto pos = qualifiedName.rfind("::");
+    if (pos == std::string::npos) return nullptr;
+    const auto* owner = findClassSymbol(qualifiedName.substr(0, pos));
+    return owner && owner->isExternal ? owner : nullptr;
+}
+
+bool SymbolTable::markExternalType(const std::string& qualifiedName) {
+    if (!findClassSymbol(qualifiedName)) return false;
+    std::set<std::string> owners{qualifiedName};
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (const auto& [name, cls] : classSymbols_) {
+            if (owners.count(cls.enclosingType) && owners.insert(name).second) changed = true;
+        }
+    }
+    for (const auto& name : owners) {
+        if (classSymbols_.at(name).isComptime) return false;
+    }
+    for (const auto& [name, fn] : functions_) {
+        if (owners.count(fn.owningType) && fn.isComptime) return false;
+    }
+    for (const auto& name : owners) {
+        auto& cls = classSymbols_.at(name);
+        cls.isExternal = true;
+        cls.externalOwner = qualifiedName;
+        for (auto& member : cls.memberVars) {
+            member.isExternal = true;
+            member.externalOwner = qualifiedName;
+        }
+        for (auto& op : cls.operatorOverloads) {
+            op.isExternal = true;
+            op.externalOwner = qualifiedName;
+        }
+    }
+    for (auto& [name, fn] : functions_) {
+        if (!owners.count(fn.owningType)) continue;
+        fn.isExternal = true;
+        fn.externalOwner = qualifiedName;
+    }
+    return true;
+}
+
 bool SymbolTable::addConstraintSymbol(const ConstraintSymbol& sym) {
     auto [it, inserted] = constraintSymbols_.emplace(sym.qualifiedName, sym);
     return inserted;
@@ -152,6 +200,18 @@ std::vector<std::string> SymbolTable::mergeSelected(const SymbolTable& source,
             if (cs.simpleName == sym) {
                 if (filterInternal && cs.visibility == Visibility::Internal) continue;
                 addClassSymbol(cs);
+                if (cs.isExternal) {
+                    const std::string prefix = cs.qualifiedName + "::";
+                    for (const auto& [nestedName, nested] : source.classSymbols()) {
+                        if (nestedName.compare(0, prefix.size(), prefix) == 0)
+                            addClassSymbol(nested);
+                    }
+                    for (const auto& [memberName, member] : source.functions()) {
+                        if (member.owningType == cs.qualifiedName ||
+                            member.owningType.compare(0, prefix.size(), prefix) == 0)
+                            addFunction(member);
+                    }
+                }
                 found = true;
             }
         }

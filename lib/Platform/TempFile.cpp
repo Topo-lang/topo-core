@@ -117,8 +117,20 @@ fs::path homeDirectory() {
 #endif
 }
 
-TempFile::TempFile(const std::string& stem, const std::string& ext) {
-    fs::path dir = tempDirectory();
+TempFile::TempFile(const std::string& stem, const std::string& ext)
+    : TempFile(tempDirectory(), stem, ext) {}
+
+void atomicReplaceFile(const fs::path& source, const fs::path& destination) {
+#ifdef _WIN32
+    if (!MoveFileExW(source.c_str(), destination.c_str(),
+                     MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        throw std::system_error(GetLastError(), std::system_category(), "atomic file replacement");
+#else
+    fs::rename(source, destination);
+#endif
+}
+
+TempFile::TempFile(const fs::path& dir, const std::string& stem, const std::string& ext) {
     int pid = currentPid();
 
     // Probe up to 1024 candidate names with an exclusive-create. The

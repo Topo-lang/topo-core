@@ -999,6 +999,8 @@ void ModelOptimizer::addPass(std::unique_ptr<ModelPass> pass) {
 
 void ModelOptimizer::optimize(TranspileModule& module) {
     for (auto& func : module.functions) {
+        // Opaque reviewed implementations do not license body rewrites.
+        if (func.isExternal) continue;
         for (auto& pass : passes_) {
             pass->run(func);
         }

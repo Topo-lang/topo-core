@@ -24,7 +24,9 @@ void checkContainment(const SymbolTable& symbols,
     for (const auto& [name, fn] : symbols.functions()) {
         if (fn.isExternal) {
             externalQualifiedNames.insert(fn.qualifiedName);
-            externalSimpleNames.insert(fn.simpleName);
+            // Type authorization must retain its owner: a Log::write member
+            // cannot authorize an unrelated free write() by simple name.
+            if (!config.strictIdentity && fn.externalOwner.empty()) externalSimpleNames.insert(fn.simpleName);
             if (!fn.location.file.empty()) {
                 filesWithExternal.insert(fn.location.file);
             }
@@ -49,8 +51,18 @@ void checkContainment(const SymbolTable& symbols,
     // The simple-name fallback is needed because host-language qualified names
     // may include intermediate scopes not in .topo (e.g. Java class names:
     // call site "app::App::read_file" vs .topo "app::read_file").
+    auto hasExternalType = [&](std::string name) {
+        if (separator != "::" && !separator.empty()) {
+            size_t at = 0;
+            while ((at = name.find(separator, at)) != std::string::npos) {
+                name.replace(at, separator.size(), "::");
+                at += 2;
+            }
+        }
+        return symbols.externalTypeForMember(name) != nullptr;
+    };
     auto isExternalCaller = [&](const std::string& callerQN) -> bool {
-        if (externalQualifiedNames.count(callerQN)) return true;
+        if (externalQualifiedNames.count(callerQN) || hasExternalType(callerQN)) return true;
         // Extract simple name (last component after the language separator).
         std::string simpleName = callerQN;
         if (!separator.empty()) {
@@ -71,6 +83,7 @@ void checkContainment(const SymbolTable& symbols,
     // external (e.g. user `Reader::read` vs .topo `io::read`) silently bypasses
     // containment.
     auto isExternalCallee = [&](const std::string& calleePattern) -> bool {
+        if (externalQualifiedNames.count(calleePattern) || hasExternalType(calleePattern)) return true;
         if (!externalSimpleNames.count(calleePattern)) return false;
         return !hasNonExternalWithSimpleName(calleePattern);
     };

@@ -1,0 +1,174 @@
+name: Release provenance
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-provenance-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  SOURCE_COMMIT: ${{ github.sha }}
+  SOURCE_REPOSITORY: ${{ github.repository }}
+  WORKFLOW_COMMIT: ${{ github.workflow_sha }}
+  BUILD_RUN: ${{ github.run_id }}
+  BUILD_ATTEMPT: ${{ github.run_attempt }}
+jobs:
+  candidate:
+    if: github.repository == 'Topo-lang/topo-core' && github.ref == 'refs/heads/main' && github.ref_protected
+    runs-on: ubuntu-24.04
+    # Project build scripts receive no OIDC, attestation, or environment secrets.
+    permissions:
+      contents: read
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Fetch and verify fixed dependencies
+        run: sh scripts/provenance/bootstrap.sh "$RUNNER_TEMP/deps" "$RUNNER_TEMP/prefix"
+      - name: Configure without imported binary caches
+        run: |
+          cmake -S . -B build-provenance -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/prefix" \
+            -DTOPO_CORE_BUILD_TESTS=ON \
+            -DFETCHCONTENT_SOURCE_DIR_REPROC="$RUNNER_TEMP/deps/reproc-14.2.7" \
+            -DFETCHCONTENT_SOURCE_DIR_GOOGLETEST="$RUNNER_TEMP/deps/googletest-1.15.2"
+      - name: Build and test
+        run: |
+          cmake --build build-provenance --parallel 2
+          export TOPO_TEST_TRUSTED_GH="$(command -v gh)"
+          ctest --test-dir build-provenance --output-on-failure --timeout 120
+          TOPO_PROVENANCE_TEST_TOPO="$PWD/build-provenance/tools/topo/topo" \
+            python3 -I scripts/provenance/test_candidate.py
+      - name: Freeze release candidate and metadata
+        run: |
+          cmake --install build-provenance --prefix "$RUNNER_TEMP/payload"
+          mkdir release-candidate
+          build-provenance/tools/topo/topo evidence snapshot \
+            --root "payload=$RUNNER_TEMP/payload" --label "$SOURCE_COMMIT" \
+            --output release-candidate/payload.evidence.json
+          build-provenance/tools/topo/topo evidence verify \
+            --root "payload=$RUNNER_TEMP/payload" --manifest release-candidate/payload.evidence.json
+          tar --format=ustar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
+            -czf release-candidate/topo-core-linux-x86_64.tar.gz -C "$RUNNER_TEMP/payload" .
+          python3 -I scripts/provenance/candidate.py freeze release-candidate "$RUNNER_TEMP/deps" .
+          chmod a-w release-candidate/*
+      - name: Upload immutable candidate for this run and attempt
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: topo-core-candidate-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          path: release-candidate/
+          if-no-files-found: error
+          retention-days: 7
+
+  sign:
+    needs: candidate
+    if: github.repository == 'Topo-lang/topo-core' && github.ref == 'refs/heads/main' && github.ref_protected
+    runs-on: ubuntu-24.04
+    environment: release-provenance
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CANDIDATE_ARTIFACT_ID: ${{ needs.candidate.outputs.artifact-id }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Load only the reviewed control plane from the workflow commit
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: control
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.github/workflows/provenance.yml
+            /scripts/provenance/
+      - name: Download exact current-run candidate and verify transport identity
+        run: |
+          python3 -I control/scripts/provenance/candidate.py download candidate \
+            "$CANDIDATE_ARTIFACT_ID" "$RUNNER_TEMP/candidate" "$RUNNER_TEMP/candidate-transport.json"
+      - name: Independently verify candidate bytes, recipe and inventory
+        run: |
+          python3 -I control/scripts/provenance/candidate.py prepare-signing \
+            "$RUNNER_TEMP/candidate" control "$RUNNER_TEMP/candidate-transport.json"
+          chmod a-w "$RUNNER_TEMP/candidate/"*
+      - name: Sign verified frozen subjects
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: |
+            ${{ runner.temp }}/candidate/topo-core-linux-x86_64.tar.gz
+            ${{ runner.temp }}/candidate/payload.evidence.json
+            ${{ runner.temp }}/candidate/recipe.json
+            ${{ runner.temp }}/candidate/signing-statement.json
+            ${{ runner.temp }}/candidate/SHA256SUMS
+      - name: Export bundle and informational trust-root snapshot
+        env:
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          cp "$BUNDLE_PATH" "$RUNNER_TEMP/candidate/attestation.sigstore.json"
+          gh attestation trusted-root > "$RUNNER_TEMP/candidate/trusted-root.json"
+      - name: Upload signed candidate for independent verification
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: topo-core-signed-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          path: ${{ runner.temp }}/candidate/
+          if-no-files-found: error
+          retention-days: 30
+
+  verify:
+    needs: sign
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SIGNED_ARTIFACT_ID: ${{ needs.sign.outputs.artifact-id }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Load fixed verification control plane
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: control
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /.github/workflows/provenance.yml
+            /scripts/provenance/
+      - name: Download the signed artifact by exact ID and current run
+        run: |
+          python3 -I control/scripts/provenance/candidate.py download signed \
+            "$SIGNED_ARTIFACT_ID" "$RUNNER_TEMP/signed" "$RUNNER_TEMP/signed-transport.json"
+      - name: Verify with this runner's gh and independently obtained trust root
+        run: |
+          gh attestation trusted-root > "$RUNNER_TEMP/verification-trusted-root.json"
+          python3 -I control/scripts/provenance/candidate.py verify-signed \
+            "$RUNNER_TEMP/signed" control "$RUNNER_TEMP/verification-trusted-root.json" \
+            "$RUNNER_TEMP/verification.json"
+      - name: Save independent verification result
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: topo-core-verification-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          path: ${{ runner.temp }}/verification.json
+          if-no-files-found: error
+          retention-days: 30

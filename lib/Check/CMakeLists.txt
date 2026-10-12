@@ -1,4 +1,5 @@
 add_library(TopoCheck
+    Audit.cpp
     StageIsolationCheck.cpp
     VisibilityCheck.cpp
     PurityCheck.cpp
@@ -17,6 +18,7 @@ add_library(topo::core::TopoCheck ALIAS TopoCheck)
 # TopoCheck depends on core libraries + Platform for subprocess execution.
 # Zero LLVM dependency.
 target_link_libraries(TopoCheck PUBLIC TopoSema TopoAST TopoAnalysis PRIVATE TopoPlatform)
+target_link_libraries(TopoCheck PUBLIC nlohmann_json::nlohmann_json PRIVATE TopoDistribution)
 
 topo_set_compiler_flags(TopoCheck)
 

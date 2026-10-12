@@ -176,6 +176,52 @@ bool IncrementalCache::loadVisibilityEntries(std::vector<VisibilityEntry>& v) co
     }
 }
 
+bool IncrementalCache::saveEvidenceManifest(const evidence::Manifest& manifest, std::string& error) const {
+    return evidence::writeManifest(cacheDir() / "evidence.json", manifest, error);
+}
+
+bool IncrementalCache::loadEvidenceManifest(evidence::Manifest& manifest, std::string& error) const {
+    return evidence::readManifest(cacheDir() / "evidence.json", manifest, error);
+}
+
+evidence::VerificationResult IncrementalCache::verifyEvidence(const evidence::Action& expected,
+                                                            const evidence::RootMap& roots) const {
+    evidence::Manifest manifest;
+    std::string error;
+    if (!loadEvidenceManifest(manifest, error)) {
+        evidence::VerificationResult result;
+        result.diagnostics.push_back("cache evidence unavailable: " + error);
+        return result;
+    }
+    auto result = evidence::verifyManifest(manifest, roots);
+    if (!result.integrity) return result;
+    if (manifest.roots.size() != 1) {
+        result.integrity = false;
+        result.diagnostics.push_back("cache evidence requires exactly one action root");
+        return result;
+    }
+    for (const auto& node : manifest.nodes) {
+        if (node.id != manifest.roots.front()) continue;
+        // verifyManifest already checked this node's digest and every file.
+        // Compare the expected action even when coverage remains incomplete;
+        // an unrelated valid manifest does not establish cache integrity.
+        const auto expectedDigest = evidence::actionDigest(expected);
+        if (expectedDigest.empty() || evidence::actionDigest(node.action) != expectedDigest) {
+            result.integrity = false;
+            result.diagnostics.push_back("cache action identity mismatch");
+        }
+        if ((node.kind != "cache" && node.kind != "build-stage" && node.kind != "audit") ||
+            node.outputs.empty()) {
+            result.integrity = false;
+            result.diagnostics.push_back("cache root is not an action with recorded outputs");
+        }
+        return result;
+    }
+    result.integrity = false;
+    result.diagnostics.push_back("cache action root is missing");
+    return result;
+}
+
 // ===================================================================
 // Config fingerprint
 // ===================================================================

@@ -21,8 +21,20 @@
 
 namespace topo::build {
 
+struct BackendEvidenceRequest {
+    int protocolVersion = 1;
+    std::string mode;
+    std::string manifestPath;
+    std::string compilerSha256;
+    std::string linkerPath;
+    std::string linkerSha256;
+};
+
 /// All data the backend tool needs to execute Steps 3-7.
 struct BackendRequest {
+    BackendEvidenceRequest evidence;
+    std::string checkModelPath;
+    std::string checkModelSha256;
     backend::BackendConfig config;
     std::string outputPath;
     SymbolTable symbolTable;
@@ -49,6 +61,11 @@ std::string serializeBackendRequest(const BackendRequest& req);
 /// Deserialize a BackendRequest from JSON string.
 /// Returns false on parse error.
 bool deserializeBackendRequest(const std::string& jsonStr, BackendRequest& req);
+
+/// Explicit backend capability gate. Call before any source/build execution.
+bool validateEvidenceCapability(const BackendRequest& req,
+                                const std::vector<std::string>& supportedModes,
+                                std::string& error);
 
 /// Determine the backend tool name for the given language.
 /// Returns "topo-build-llvm-cpp", "topo-build-llvm-rust", "topo-build-llvm-mixed",

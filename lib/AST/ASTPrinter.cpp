@@ -105,6 +105,7 @@ void ASTPrinter::printVisibilitySection(const VisibilitySection& node, int inden
 
 void ASTPrinter::printFnDecl(const FnDecl& node, int indent) {
     printIndent(indent);
+    if (node.hasModifier(ModifierData::External)) os_ << "external ";
     if (node.isConstructor) {
         os_ << "ConstructorDecl '" << node.signature() << "'\n";
     } else if (node.isDestructor) {
@@ -181,6 +182,7 @@ void ASTPrinter::printTypeDecl(const TypeDecl& node, int indent) {
             << " arms)\n";
     } else {
         os_ << "TypeDecl '" << node.name << "'";
+        if (node.hasModifier(ModifierData::External)) os_ << " [external]";
         if (node.baseClass) {
             os_ << " : public " << node.baseClass->toString();
         }

@@ -1,5 +1,6 @@
 #include "topo/Check/CompletenessCheck.h"
 
+#include <algorithm>
 #include <cctype>
 #include <regex>
 #include <unordered_map>
@@ -114,10 +115,22 @@ void checkCompleteness(const std::vector<HostSymbol>& hostSymbols,
 
     // ===== Pass 1: Undeclared symbols =====
     for (const auto& hs : hostSymbols) {
+        if (std::find(config.manualFiles.begin(), config.manualFiles.end(), hs.file) != config.manualFiles.end()) continue;
         if (shouldSkipSymbol(hs, config, patterns)) continue;
         if (ignoredNames.count(hs.qualifiedName)) continue;
-        if (ignoredSimpleNames.count(hs.simpleName)) continue;
+        const ClassSymbol* externalOwner = symbols.externalTypeForMember(hs.qualifiedName);
+        if (!externalOwner && !hs.enclosingClass.empty()) {
+            const auto* candidate = symbols.findClassSymbol(hs.enclosingClass);
+            if (candidate && candidate->isExternal) externalOwner = candidate;
+        }
+        if (!externalOwner && ignoredSimpleNames.count(hs.simpleName)) continue;
 
+        // Only proven private/internal implementation members are opaque.
+        // Public/protected or unknown-visibility members still need declarations.
+        if (hs.hostVisibility && (*hs.hostVisibility == Visibility::Private ||
+                                  *hs.hostVisibility == Visibility::Internal)) {
+            if (externalOwner) continue;
+        }
         bool declared = false;
 
         if (hs.kind == HostSymbolKind::Class || hs.kind == HostSymbolKind::Struct ||
@@ -137,7 +150,7 @@ void checkCompleteness(const std::vector<HostSymbol>& hostSymbols,
         } else {
             declared = (symbols.findFunction(hs.qualifiedName) != nullptr);
             // Simple-name fallback for non-C++ languages
-            if (!declared) {
+            if (!declared && !externalOwner) {
                 declared = (symbols.findFunctionBySimpleName(hs.simpleName) != nullptr);
             }
             // Check class member functions
@@ -186,7 +199,7 @@ void checkCompleteness(const std::vector<HostSymbol>& hostSymbols,
         // Also check visibility entries (qualified, then simple-name fallback)
         if (!declared) {
             declared = (visMap.count(hs.qualifiedName) > 0);
-            if (!declared) {
+            if (!declared && !externalOwner) {
                 declared = (visSimpleMap.count(hs.simpleName) > 0);
             }
         }
@@ -208,7 +221,8 @@ void checkCompleteness(const std::vector<HostSymbol>& hostSymbols,
         if (ignoredNames.count(name)) continue;
         if (matchesAnyPattern(name, patterns)) continue;
 
-        if (hostNameSet.find(name) == hostNameSet.end() &&
+        const auto hostKey = fn.kind == FunctionSymbol::Kind::Constructor ? stripAritySuffix(name) : name;
+        if (hostNameSet.find(hostKey) == hostNameSet.end() &&
             hostSimpleNameSet.find(fn.simpleName) == hostSimpleNameSet.end()) {
             CheckDiagnostic diag;
             diag.severity = Severity::Warning;

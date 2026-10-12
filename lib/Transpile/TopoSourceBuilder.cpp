@@ -196,6 +196,14 @@ private:
     void walkMember(const ASTNode& node, std::vector<std::string>& nsPrefix,
                     const std::string& access) {
         switch (node.kind) {
+        case ASTKind::TypeDecl: {
+            const auto& type = static_cast<const TypeDecl&>(node);
+            if (type.hasModifier(ModifierData::External)) {
+                result_.errors.push_back("external type '" + joinQualified(nsPrefix, type.name) +
+                    "' requires host-source transpilation; .topo-source type implementation lowering is unavailable");
+            }
+            break;
+        }
         case ASTKind::FnDecl:
             collectFnDecl(static_cast<const FnDecl&>(node), nsPrefix, access);
             break;
@@ -245,6 +253,7 @@ private:
                         const std::string& access) {
         TranspileFunction fn;
         fn.qualifiedName = qualifiedName;
+        fn.isExternal = decl->hasModifier(ModifierData::External);
         fn.returnType = decl->returnType;
         fn.params = decl->params;
         fn.accessModifier = access;

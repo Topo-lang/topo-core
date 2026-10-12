@@ -4,12 +4,15 @@
 # Zero LLVM dependency; depends only on TopoPlatform plus header-only
 # toml++ / nlohmann_json.
 add_library(TopoDistribution
+    ../Build/ArtifactEvidence.cpp
+    ../Build/ArtifactAttestation.cpp
     Sha256.cpp
     SemVer.cpp
     BackendManifest.cpp
     RegistryIndex.cpp
     BackendCache.cpp
     BackendCli.cpp
+    EvidenceCli.cpp
 )
 add_library(topo::core::TopoDistribution ALIAS TopoDistribution)
 target_include_directories(TopoDistribution PUBLIC
@@ -22,7 +25,7 @@ target_include_directories(TopoDistribution PRIVATE ${TOMLPLUSPLUS_INCLUDE_DIR})
 
 target_link_libraries(TopoDistribution
     PUBLIC TopoPlatform
-    PRIVATE nlohmann_json::nlohmann_json
+    PUBLIC nlohmann_json::nlohmann_json
 )
 topo_set_compiler_flags(TopoDistribution)
 

@@ -3,6 +3,7 @@
 
 #include "topo/Build/PassConfig.h"
 #include "topo/Check/CallEdgeExtractor.h"
+#include "topo/Check/AuditTypes.h"
 #include "topo/Check/CallSiteExtractor.h"
 #include "topo/Check/CheckTypes.h"
 #include "topo/Check/ImportExtractor.h"
@@ -22,6 +23,14 @@ namespace topo::check {
 class LanguageAnalysisProvider {
 public:
     virtual ~LanguageAnalysisProvider() = default;
+
+    /// Semantic identities for an explicit audit. Legacy extraction has no
+    /// implicit audit capability: unsupported facts must stay unverified.
+    virtual AuditFacts auditFacts(const std::vector<std::string>& /*sourceFiles*/) const {
+        return {};
+    }
+    virtual void configureNativeEvidence(const std::string& /*manifest*/,
+                                          const std::map<std::string,std::string>& /*roots*/) {}
 
     virtual std::unique_ptr<SymbolExtractor> createSymbolExtractor() = 0;
     virtual std::unique_ptr<ImportExtractor> createImportExtractor() = 0;

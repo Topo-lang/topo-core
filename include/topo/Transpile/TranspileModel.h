@@ -258,6 +258,8 @@ enum class BaseClassKind { Class, Interface };
 
 struct TranspileType {
     std::string qualifiedName;
+    bool isExternal = false;
+    std::string externalOwner;
     std::vector<TranspileField> fields;
     // Inheritance hierarchy: base classes / implemented interfaces, in source
     // order. The host emitter decides which entries are an `extends` target vs
@@ -281,6 +283,9 @@ struct TranspileType {
 
 struct TranspileFunction {
     std::string qualifiedName;
+    bool isExternal = false;
+    std::string owningType;
+    std::string externalOwner;
     TypeNode returnType;
     std::vector<Parameter> params; // reuse from ASTNode.h
     std::vector<StmtPtr> body;

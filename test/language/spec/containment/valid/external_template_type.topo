@@ -1,0 +1,8 @@
+// TEST: external-template-type
+namespace app {
+public:
+  external template<typename T> type Log {
+  public:
+    void write(T value);
+  }
+}

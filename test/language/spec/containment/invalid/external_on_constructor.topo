@@ -1,5 +1,5 @@
 // TEST: external-on-constructor
-// EXPECT-ERROR: expected type member declaration
+// EXPECT-ERROR: explicit 'external' on constructors, destructors or operators requires an external type
 
 namespace app {
 

@@ -33,6 +33,10 @@ std::filesystem::path tempDirectory();
 /// audit gate because it silently breaks on Windows.
 std::filesystem::path homeDirectory();
 
+/// Atomically replace a file on the same filesystem. Throws on failure.
+void atomicReplaceFile(const std::filesystem::path& source,
+                       const std::filesystem::path& destination);
+
 /// RAII handle to a freshly created, uniquely-named temporary file.
 ///
 /// On construction:
@@ -59,6 +63,10 @@ public:
     /// (defaults to empty — no extension). Throws `std::runtime_error`
     /// on creation failure.
     explicit TempFile(const std::string& stem = "topo", const std::string& ext = "");
+
+    /// Create on the destination filesystem for atomic replacement.
+    TempFile(const std::filesystem::path& directory, const std::string& stem,
+             const std::string& ext);
 
     /// Move construction is fine.
     TempFile(TempFile&& other) noexcept;

@@ -6,6 +6,27 @@
 
 namespace topo::format {
 
+namespace {
+std::string renderTemplateParameters(const std::vector<TemplateParamDecl>& params) {
+    std::string result;
+    for (const auto& param : params) {
+        if (!result.empty()) result += ", ";
+        if (param.kind == TemplateParamDecl::TemplateTemplateParam) {
+            result += "template<" + renderTemplateParameters(param.innerParams) + "> class " + param.name;
+        } else if (param.kind == TemplateParamDecl::NonTypeParam) {
+            result += param.constraintType.toString() + " " + param.name;
+        } else {
+            result += "typename";
+            if (param.isVariadic) result += "...";
+            if (!param.name.empty()) result += " " + param.name;
+            if (!param.constraintType.nameParts.empty()) result += " : " + param.constraintType.toString();
+        }
+        if (param.defaultType) result += " = " + param.defaultType->toString();
+    }
+    return result;
+}
+} // namespace
+
 // ============================================================================
 // Public API
 // ============================================================================
@@ -399,6 +420,7 @@ void Formatter::formatFnDecl(const FnDecl& fn, int indent) {
     emitIndent(indent);
 
     std::string line;
+    if (fn.hasModifier(ModifierData::External)) line += "external ";
     if (fn.isConstructor) {
         if (fn.isExplicit) line += "explicit ";
         line += fn.className + "(" + renderParams(fn.params) + ");";
@@ -432,7 +454,6 @@ void Formatter::formatFnDecl(const FnDecl& fn, int indent) {
         }
         line += ";";
     } else {
-        if (fn.hasModifier(ModifierData::Kind::External)) line += "external ";
         if (fn.isStatic) line += "static ";
         line += fn.returnType.toString() + " " + fn.name + "(";
         line += renderParams(fn.params) + ")";
@@ -446,7 +467,7 @@ void Formatter::formatFnDecl(const FnDecl& fn, int indent) {
     if (multiLine) {
         // Multi-line params
         if (fn.isRustStyle) {
-            emit(fn.name + "(");
+            emit((fn.hasModifier(ModifierData::External) ? "external " : "") + fn.name + "(");
         } else {
             std::string prefix;
             if (fn.hasModifier(ModifierData::Kind::External)) prefix += "external ";
@@ -834,7 +855,9 @@ void Formatter::formatTypeDecl(const TypeDecl& cls, int indent) {
     }
 
     // Standard type declaration
-    std::string header = "type " + cls.name;
+    std::string header = cls.hasModifier(ModifierData::External) ? "external " : "";
+    if (!cls.templateParams.empty()) header += "template<" + renderTemplateParameters(cls.templateParams) + "> ";
+    header += "type " + cls.name;
     if (cls.baseClass) {
         header += " : public " + cls.baseClass->toString();
     }
@@ -867,7 +890,9 @@ void Formatter::formatTypeDecl(const TypeDecl& cls, int indent) {
 }
 
 void Formatter::formatTypeMember(const ASTNode& member, int indent) {
-    if (member.kind == ASTKind::FnDecl) {
+    if (member.kind == ASTKind::TypeDecl) {
+        formatTypeDecl(static_cast<const TypeDecl&>(member), indent);
+    } else if (member.kind == ASTKind::FnDecl) {
         const auto& fn = static_cast<const FnDecl&>(member);
         formatFnDecl(fn, indent);
     } else if (member.kind == ASTKind::DataDecl) {

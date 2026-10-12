@@ -295,6 +295,7 @@ void SemanticAnalyzer::visitMember(const ASTNode& member, const std::string& nsP
         sym.accessPattern = func.accessPattern;
         sym.tiledSize = func.tiledSize;
         sym.isExternal = func.hasModifier(ModifierData::External);
+        sym.explicitlyExternal = sym.isExternal;
 
         if (!symbols_.addFunction(sym)) {
             diag_.error(func.location, "duplicate function declaration '" + qualified + "'");
@@ -376,8 +377,10 @@ void SemanticAnalyzer::visitMember(const ASTNode& member, const std::string& nsP
     } else if (member.kind == ASTKind::TypeDecl) {
         const auto& td = static_cast<const TypeDecl&>(member);
 
-        if (td.hasModifier(ModifierData::External)) {
-            diag_.error(td.location, "'external' can only modify function declarations");
+        if (td.hasModifier(ModifierData::External) &&
+            (td.isConstraint() || td.isAdapt() || td.isTypeFn())) {
+            diag_.error(td.location, "'external' requires a function or ordinary type declaration");
+            return;
         }
 
         if (td.isConstraint()) {
@@ -403,7 +406,9 @@ void SemanticAnalyzer::visitMember(const ASTNode& member, const std::string& nsP
     }
 }
 
-void SemanticAnalyzer::visitTypeDecl(const TypeDecl& typeNode, const std::string& nsPath, Visibility visibility) {
+void SemanticAnalyzer::visitTypeDecl(const TypeDecl& typeNode, const std::string& nsPath, Visibility visibility,
+                                     const std::string& inheritedExternalOwner,
+                                     const std::string& enclosingType) {
     std::string qualified = nsPath + "::" + typeNode.name;
 
     if (!typeNode.specializationArgs.empty()) {
@@ -422,6 +427,14 @@ void SemanticAnalyzer::visitTypeDecl(const TypeDecl& typeNode, const std::string
     classSym.location = typeNode.location;
     classSym.baseClass = typeNode.baseClass;
     classSym.templateParams = typeNode.templateParams;
+    classSym.enclosingType = enclosingType;
+    classSym.isComptime = typeNode.hasModifier(ModifierData::Comptime);
+    classSym.explicitlyExternal = typeNode.hasModifier(ModifierData::External);
+    classSym.isExternal = classSym.explicitlyExternal || !inheritedExternalOwner.empty();
+    classSym.externalOwner = classSym.explicitlyExternal ? qualified : inheritedExternalOwner;
+    if (classSym.isExternal && typeNode.hasModifier(ModifierData::Comptime)) {
+        diag_.error(typeNode.location, "'external' and 'comptime' are mutually exclusive");
+    }
 
     for (const auto& section : typeNode.sections) {
         if (section->kind != ASTKind::VisibilitySection) continue;
@@ -431,68 +444,77 @@ void SemanticAnalyzer::visitTypeDecl(const TypeDecl& typeNode, const std::string
             if (member->kind == ASTKind::FnDecl) {
                 const auto& func = static_cast<const FnDecl&>(*member);
 
-                if (func.isConstructor) {
-                    if (func.hasModifier(ModifierData::External)) {
-                        diag_.error(func.location, "'external' cannot be applied to constructors");
-                    }
-                    std::string ctorQualified = qualified + "::" + typeNode.name;
-                    std::string ctorKey = ctorQualified + "/" + std::to_string(func.params.size());
-                    classSym.constructors.push_back(ctorKey);
+                const bool explicitExternal = func.hasModifier(ModifierData::External);
+                const bool effectiveExternal = explicitExternal || classSym.isExternal;
+                if (effectiveExternal && func.hasModifier(ModifierData::Comptime)) {
+                    diag_.error(func.location, "'external' and 'comptime' are mutually exclusive");
+                    continue;
+                }
+                if (explicitExternal && !classSym.isExternal &&
+                    (func.isConstructor || func.isDestructor || func.isOperator())) {
+                    diag_.error(func.location,
+                        "explicit 'external' on constructors, destructors or operators requires an external type");
+                    if (!classSym.isExternal) continue;
+                }
 
+                FunctionSymbol sym;
+                sym.qualifiedName = qualified + "::" + normalizeName(func.name);
+                sym.simpleName = func.name;
+                sym.visibility = vis.visibility;
+                sym.location = func.location;
+                sym.returnType = func.returnType;
+                sym.params = func.params;
+                sym.isConst = func.isConst;
+                sym.isStatic = func.isStatic;
+                sym.isMultiReturn = func.isMultiReturn;
+                sym.returnParams = func.returnParams;
+                sym.hasUsedReturnsClause = func.hasUsedReturnsClause;
+                for (const auto& n : func.declaredUsedReturns) sym.usedReturns.insert(n);
+                sym.templateParams = func.templateParams;
+                sym.bindingTarget = func.bindingTarget;
+                sym.priority = func.priority;
+                sym.cardinality = func.cardinality;
+                sym.accessPattern = func.accessPattern;
+                sym.tiledSize = func.tiledSize;
+                sym.isExternal = effectiveExternal;
+                sym.isComptime = func.hasModifier(ModifierData::Comptime) || func.isComptime();
+                sym.explicitlyExternal = explicitExternal;
+                sym.owningType = qualified;
+                sym.externalOwner = classSym.externalOwner;
+
+                if (func.isConstructor) {
+                    sym.kind = FunctionSymbol::Kind::Constructor;
+                    sym.qualifiedName += "/" + std::to_string(func.params.size());
+                    classSym.constructors.push_back(sym.qualifiedName);
+                    sym.returnType.nameParts = {"void"};
                 } else if (func.isDestructor) {
-                    if (func.hasModifier(ModifierData::External)) {
-                        diag_.error(func.location, "'external' cannot be applied to destructors");
-                    }
-                    std::string dtorQualified = qualified + "::~" + typeNode.name;
+                    sym.kind = FunctionSymbol::Kind::Destructor;
                     if (!classSym.destructor.empty()) {
                         diag_.error(member->location, "duplicate destructor in type '" + qualified + "'");
                     }
-                    classSym.destructor = dtorQualified;
-
+                    classSym.destructor = sym.qualifiedName;
+                    sym.returnType.nameParts = {"void"};
                 } else if (func.isOperator()) {
+                    sym.kind = FunctionSymbol::Kind::Operator;
                     OperatorSymbol opSym;
                     opSym.op = *func.operatorOp;
                     opSym.params = func.params;
                     opSym.returnType = func.returnType;
                     opSym.bindingTarget = func.bindingTarget;
                     opSym.location = func.location;
+                    opSym.isExternal = effectiveExternal;
+                    opSym.owningType = qualified;
+                    opSym.externalOwner = classSym.externalOwner;
                     classSym.operatorOverloads.push_back(std::move(opSym));
-
                 } else {
-                    // External + comptime mutual exclusion (same as visitMember)
-                    if (func.hasModifier(ModifierData::External) && func.hasModifier(ModifierData::Comptime)) {
-                        diag_.error(func.location, "'external' and 'comptime' are mutually exclusive");
-                        continue;
-                    }
-
-                    // Regular member function
-                    std::string normalized = normalizeName(func.name);
-                    std::string memberQualified = qualified + "::" + normalized;
-
-                    FunctionSymbol sym;
-                    sym.qualifiedName = memberQualified;
-                    sym.simpleName = func.name;
-                    sym.visibility = vis.visibility;
-                    sym.location = func.location;
-                    sym.returnType = func.returnType;
-                    sym.params = func.params;
-                    sym.isConst = func.isConst;
-                    sym.isStatic = func.isStatic;
-                    sym.hasLogicBlock = false;
-                    sym.isMultiReturn = func.isMultiReturn;
-                    sym.returnParams = func.returnParams;
-                    sym.hasUsedReturnsClause = func.hasUsedReturnsClause;
-                    for (const auto& n : func.declaredUsedReturns) sym.usedReturns.insert(n);
-                    sym.priority = func.priority;
-                    sym.cardinality = func.cardinality;
-                    sym.accessPattern = func.accessPattern;
-                    sym.tiledSize = func.tiledSize;
-                    sym.isExternal = func.hasModifier(ModifierData::External);
-
+                    classSym.memberFunctions.push_back(sym.qualifiedName);
+                }
+                // Preserve the legacy function set for ordinary types. External
+                // types additionally expose special entries to boundary consumers.
+                if (sym.kind == FunctionSymbol::Kind::Function || classSym.isExternal) {
                     if (!symbols_.addFunction(sym)) {
-                        diag_.error(func.location, "duplicate member function declaration '" + memberQualified + "'");
+                        diag_.error(func.location, "duplicate member function declaration '" + sym.qualifiedName + "'");
                     }
-                    classSym.memberFunctions.push_back(memberQualified);
                 }
 
             } else if (member->kind == ASTKind::DataDecl) {
@@ -513,7 +535,21 @@ void SemanticAnalyzer::visitTypeDecl(const TypeDecl& typeNode, const std::string
                     mvs.type = data.type;
                     mvs.isStatic = data.isStatic();
                     mvs.location = data.location;
+                    mvs.owningType = qualified;
+                    mvs.isExternal = classSym.isExternal;
+                    mvs.externalOwner = classSym.externalOwner;
                     classSym.memberVars.push_back(std::move(mvs));
+                }
+            } else if (member->kind == ASTKind::TypeDecl) {
+                const auto& nested = static_cast<const TypeDecl&>(*member);
+                if (nested.isConstraint() || nested.isAdapt() || nested.isTypeFn()) {
+                    if (classSym.isExternal || nested.hasModifier(ModifierData::External)) {
+                        diag_.error(nested.location, "external type members require ordinary nested types");
+                    } else {
+                        visitMember(nested, qualified, vis.visibility);
+                    }
+                } else {
+                    visitTypeDecl(nested, qualified, vis.visibility, classSym.externalOwner, qualified);
                 }
             }
         }

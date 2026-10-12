@@ -121,6 +121,28 @@ TranspileResult TranspileDriver::run(const TranspileRequest& request) {
         return result;
     }
 
+    // Bind the extracted model to the declaration's effective boundaries.
+    // Use resolved qualified identity where the extractor provides one.
+    for (auto& type : module.types) {
+        if (const auto* declaration = symbols.findClassSymbol(type.qualifiedName)) {
+            type.isExternal = declaration->isExternal;
+            type.externalOwner = declaration->externalOwner;
+        }
+    }
+    for (auto& function : module.functions) {
+        const auto& name = function.resolvedQualifiedName.empty()
+            ? function.qualifiedName : function.resolvedQualifiedName;
+        if (const auto* declaration = symbols.findFunction(name)) {
+            function.isExternal = declaration->isExternal;
+            function.owningType = declaration->owningType;
+            function.externalOwner = declaration->externalOwner;
+        } else if (const auto* owner = symbols.externalTypeForMember(name)) {
+            function.isExternal = true;
+            function.owningType = owner->qualifiedName;
+            function.externalOwner = owner->externalOwner;
+        }
+    }
+
     // 3b. Apply pipeline filter if requested
     if (!request.pipelineName.empty()) {
         std::vector<std::string> filterErrors;

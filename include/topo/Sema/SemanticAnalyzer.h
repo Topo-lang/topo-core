@@ -22,7 +22,9 @@ private:
     void visitNamespace(const NamespaceDecl& ns, const std::string& parentPath, Visibility currentVis);
     void visitSection(const VisibilitySection& section, const std::string& nsPath, bool forceInternal = false);
     void visitMember(const ASTNode& member, const std::string& nsPath, Visibility visibility);
-    void visitTypeDecl(const TypeDecl& typeNode, const std::string& nsPath, Visibility visibility);
+    void visitTypeDecl(const TypeDecl& typeNode, const std::string& nsPath, Visibility visibility,
+                       const std::string& inheritedExternalOwner = {},
+                       const std::string& enclosingType = {});
     void visitConstraintTypeDecl(const TypeDecl& constraint, const std::string& nsPath);
     void visitAdaptTypeDecl(const TypeDecl& adapt, const std::string& nsPath);
     void visitInstantiateDataDecl(const DataDecl& inst, const std::string& nsPath);

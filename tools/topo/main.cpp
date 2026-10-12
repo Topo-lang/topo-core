@@ -2,6 +2,7 @@
 #include "topo/Basic/Diagnostic.h"
 #include "topo/Analysis/ImportPathCheck.h"
 #include "topo/Distribution/BackendCli.h"
+#include "topo/Distribution/EvidenceCli.h"
 #include "topo/Lexer/Lexer.h"
 #include "topo/Parser/Parser.h"
 #include "topo/Sema/ImportResolver.h"
@@ -168,6 +169,11 @@ static int doMerge(const std::string& filepath, int argc, char* argv[]) {
 }
 
 int main(int argc, char* argv[]) {
+    if (argc >= 2 && std::string(argv[1]) == "evidence") {
+        std::vector<std::string> args;
+        for (int i = 2; i < argc; ++i) args.emplace_back(argv[i]);
+        return topo::dist::runEvidenceCli(args);
+    }
     // `topo backend ...` — on-demand backend distribution CLI. Handled before
     // the .topo file-mode logic because it has its own argument grammar.
     if (argc >= 2 && std::string(argv[1]) == "backend") {

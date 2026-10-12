@@ -114,8 +114,20 @@ struct BuildConfig {
     std::vector<std::string> linkLibs;
     std::vector<std::string> linkDirs;
     bool noIncremental = false;                                // --no-incremental: force full rebuild
+    std::string evidenceMode;                                  // empty, commands, isolated-build
+    std::string evidenceOutput;                                // detached evidence manifest path
+    std::string evidenceCompilerSha256;
+    std::string evidenceLinkerPath;
+    std::string evidenceLinkerSha256;
+    std::string checkModelPath;                                // generated per-TU command model
+    std::string checkModelSha256;                              // immutable model checked by frontend
     bool cleanCache = false;                                   // --clean: remove .topo-cache/ before build
     CheckMode checkMode = CheckMode::Auto;                     // [build].check: on / off / auto (default auto)
+    bool auditCheck = false;                                  // --audit / [check.audit].enabled
+    std::string auditReportPath;
+    std::string auditTrustStore;
+    std::string auditNativeEvidence;
+    std::map<std::string, std::string> auditEvidenceRoots;
     std::optional<bool> checkCliOverride;                      // --check / --no-check: dominates checkMode
     std::unordered_map<std::string, std::string> typeBindings; // [types] overrides
 
@@ -178,6 +190,10 @@ struct BuildConfig {
     // Java-specific configuration (only used when language == Java)
     struct JavaConfig {
         std::string targetVersion; // [build.java].target_version → javac --release N
+        std::string javaHome;
+        std::vector<std::string> classpath; // Preserve compiler lookup order.
+        std::vector<std::string> jvmArgs;
+        std::string mainClass;
     } javaCfg;
 };
 

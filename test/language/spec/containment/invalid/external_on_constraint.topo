@@ -1,0 +1,6 @@
+// TEST: external-on-constraint
+// EXPECT-ERROR: external
+namespace app {
+public:
+  external constraint Log { void write(); }
+}

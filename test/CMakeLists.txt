@@ -16,7 +16,21 @@
 
 # topo-core unit tests — built only when the plugin-aware libs they link
 # against (TopoBuildLib, TopoCppTranspile, ...) are available.
+add_executable(topo-evidence-tests
+    unit/AuditTest.cpp
+    unit/ArtifactEvidenceTest.cpp
+    unit/ArtifactAttestationTest.cpp
+    unit/EvidenceCliTest.cpp
+)
+target_link_libraries(topo-evidence-tests PRIVATE TopoCheck TopoDistribution GTest::gtest_main)
+topo_set_compiler_flags(topo-evidence-tests)
+gtest_discover_tests(topo-evidence-tests DISCOVERY_MODE PRE_TEST)
+
 if(TOPO_CORE_WITH_LANG)
+    add_executable(topo-execution-evidence-tests unit/ExecutionEvidenceTest.cpp unit/IncrementalEvidenceCacheTest.cpp)
+    target_link_libraries(topo-execution-evidence-tests PRIVATE TopoBuildLib GTest::gtest_main)
+    topo_set_compiler_flags(topo-execution-evidence-tests)
+    gtest_discover_tests(topo-execution-evidence-tests DISCOVERY_MODE PRE_TEST)
     # Per-language plugin packages come from add_subdirectory in monorepo
     # or from installed packages in standalone. QUIET so monorepo (where
     # no installed config exists yet — the in-source aliases supply the
@@ -61,6 +75,7 @@ if(TOPO_CORE_WITH_LANG)
     topo_set_compiler_flags(topo-process-test-helper)
 
     add_executable(topo-core-tests
+        unit/ExternalTypeTest.cpp
         unit/LexerTest.cpp
         unit/ParserTest.cpp
         unit/ParserSafetyTest.cpp
@@ -88,6 +103,7 @@ if(TOPO_CORE_WITH_LANG)
         unit/TopoProfTest.cpp
         unit/JfrNdjsonMergeTest.cpp
         unit/TransformTest.cpp
+        unit/ExternalTypeLinkageTest.cpp
         unit/TranspileTest.cpp
         unit/TypeRegistryTest.cpp
         unit/TranspileNewConstructsTest.cpp

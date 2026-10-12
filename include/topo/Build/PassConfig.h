@@ -191,6 +191,8 @@ struct InlineConfig {
 
 struct ContainmentConfig {
     FeatureMode mode = FeatureMode::Off;
+    // Audit callers supply resolved identities; simple-name guesses grant no boundary.
+    bool strictIdentity = false;
     bool isEnabled() const { return mode != FeatureMode::Off; }
 };
 

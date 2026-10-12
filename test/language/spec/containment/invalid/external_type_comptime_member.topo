@@ -1,0 +1,6 @@
+// TEST: external-type-comptime-member
+// EXPECT-ERROR: mutually exclusive
+namespace app {
+public:
+  external type Log { public: comptime void write(); }
+}
