@@ -171,7 +171,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ runner.temp }}/topo-install
-          key: topo-lang-prefix-${{ matrix.os }}-${{ env.TOPO_LANG_REF }}-${{ env.TOPO_LANG_CPP_REF }}-${{ env.TOPO_LANG_RUST_REF }}-${{ env.TOPO_LANG_JAVA_REF }}-${{ env.TOPO_LANG_PYTHON_REF }}-v1
+          key: topo-lang-prefix-${{ matrix.os }}-${{ env.TOPO_LANG_REF }}-${{ env.TOPO_LANG_CPP_REF }}-${{ env.TOPO_LANG_RUST_REF }}-${{ env.TOPO_LANG_JAVA_REF }}-${{ env.TOPO_LANG_PYTHON_REF }}-v2-audit
 
       - name: Build & install topo-core (lang-less)
         if: steps.lang-prefix-cache.outputs.cache-hit != 'true'
