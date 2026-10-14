@@ -207,8 +207,8 @@ TEST_F(AuditTest, SymlinkParentSegmentsPreserveDistinctInputsAndManualIdentities
     ASSERT_EQ(rawInputs.size(), 1u);
     ASSERT_EQ(directInputs.size(), 1u);
     EXPECT_EQ(rawInputs[0]["resolvedPath"], target.generic_string());
-    EXPECT_EQ(rawInputs[0]["sha256"], topo::dist::sha256File(target));
-    EXPECT_EQ(directInputs[0]["sha256"], topo::dist::sha256File(direct));
+    EXPECT_EQ(rawInputs[0]["sha256"], topo::dist::sha256File(target.string()));
+    EXPECT_EQ(directInputs[0]["sha256"], topo::dist::sha256File(direct.string()));
     ASSERT_EQ(r["manual"].size(), 2u);
     EXPECT_EQ(r["manual"][0]["identity"], "raw-value");
     EXPECT_EQ(r["manual"][0]["file"], raw.string());
