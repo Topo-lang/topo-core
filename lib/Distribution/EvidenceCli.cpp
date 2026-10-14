@@ -70,6 +70,9 @@ int runEvidenceCli(const std::vector<std::string>& args) {
                          "       topo evidence verify --manifest FILE --root ID=DIR [--policy FILE --bundle FILE]\n"
                          "       topo evidence attest --artifact FILE --policy FILE --bundle FILE\n"
                          "       topo evidence compare FILE FILE\n"
+                         "Verification cache: --verification-cache PRIVATE_DIR --project-root UNTRUSTED_DIR\n"
+                         "                    --trust-epoch ID [--cache-max-age SECONDS (1..86400)]\n"
+                         "The reviewer provisions the private store outside the artifact/bundle project tree.\n"
                          "Policy pins gh path/hash/version, trusted root hash, repository, workflow and commits.\n"
                          "All commands preserve artifact bytes; content inventory establishes integrity only.\n";
             return 0;
@@ -84,6 +87,8 @@ int runEvidenceCli(const std::vector<std::string>& args) {
         }
         ev::RootMap roots;
         std::string output,manifestPath,policyPath,bundle,artifact,label;
+        ev::AttestationCacheOptions cache;
+        bool cacheRequested=false;
         for (std::size_t i=1;i<args.size();++i) {
             if (i+1==args.size()) throw std::runtime_error("missing value for " + args[i]);
             const auto option=args[i++]; const auto value=args[i];
@@ -98,8 +103,20 @@ int runEvidenceCli(const std::vector<std::string>& args) {
             else if (option=="--bundle") bundle=value;
             else if (option=="--artifact") artifact=value;
             else if (option=="--label") label=value;
+            else if (option=="--verification-cache") { cache.directory=fs::absolute(value); cacheRequested=true; }
+            else if (option=="--project-root") { cache.projectRoot=fs::absolute(value); cacheRequested=true; }
+            else if (option=="--trust-epoch") { cache.trustEpoch=value; cacheRequested=true; }
+            else if (option=="--cache-max-age") {
+                if (value.empty() || !std::all_of(value.begin(),value.end(),[](char c) { return c>='0' && c<='9'; }))
+                    throw std::runtime_error("cache max age must be an integer from 1 through 86400");
+                cache.maxAgeSeconds=std::stoll(value); cacheRequested=true;
+            }
             else throw std::runtime_error("unknown evidence option: " + option);
         }
+        if (cacheRequested && ((args[0]!="attest" && args[0]!="verify") || policyPath.empty() ||
+                               cache.directory.empty() || cache.projectRoot.empty() || cache.trustEpoch.empty() ||
+                               cache.maxAgeSeconds<1 || cache.maxAgeSeconds>86400))
+            throw std::runtime_error("verification caching requires verify/attest, policy, private store, project root, trust epoch and max age 1..86400");
         if (args[0]=="snapshot") {
             if (roots.empty() || output.empty()) throw std::runtime_error("snapshot requires --root and --output");
             ev::Record record;
@@ -157,7 +174,7 @@ int runEvidenceCli(const std::vector<std::string>& args) {
         } else if (artifact.empty() || policyPath.empty()) throw std::runtime_error("attest requires --artifact and --policy");
         if (!policyPath.empty()) {
             auto config=readJson(policyPath);
-            rejectUnknown(config,{"schemaVersion","gh","ghSha256","ghVersion","trustedRoot","trustedRootSha256", "repository","signerWorkflow","signerDigest","sourceDigest","sourceRef","certificateIdentity","predicateType"});
+            rejectUnknown(config,{"schemaVersion","gh","ghSha256","ghVersion","trustedRoot","trustedRootSha256", "repository","signerWorkflow","signerDigest","sourceDigest","sourceRef","certificateIdentity","predicateType","revoked"});
             if (config.at("schemaVersion")!=1) throw std::runtime_error("unsupported identity policy");
             const auto parent=fs::absolute(policyPath).parent_path();
             ev::AttestationOptions options;
@@ -171,10 +188,14 @@ int runEvidenceCli(const std::vector<std::string>& args) {
             policy.signerDigest=config.at("signerDigest"); policy.sourceDigest=config.at("sourceDigest");
             policy.sourceRef=config.value("sourceRef",""); policy.certificateIdentity=config.value("certificateIdentity","");
             policy.predicateType=config.value("predicateType",policy.predicateType);
-            auto verified=ev::verifyGitHubAttestation(options,policy);
+            policy.revoked=config.value("revoked",false);
+            cache.purpose=args[0]=="attest"?"artifact-attestation":"distribution-manifest";
+            auto verified=cacheRequested?ev::verifyGitHubAttestationCached(options,policy,cache):ev::verifyGitHubAttestation(options,policy);
             if (args[0]=="attest") result["integrity"]=verified.integrity;
             result["signerIdentity"]=verified.signerIdentity;
             result["verificationKey"]=verified.verificationKey;
+            result["verificationCacheHit"]=verified.cacheHit;
+            result["verificationCacheExpiresAt"]=verified.cacheExpiresAt;
             for (const auto& d:verified.diagnostics) result["diagnostics"].push_back(d);
             success=success && verified.integrity && verified.signerIdentity;
         } else if (!bundle.empty()) throw std::runtime_error("bundle requires caller-supplied --policy");
