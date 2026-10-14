@@ -620,6 +620,7 @@ struct ContainedCapture {
     // Closing the job is also the exception-safe kill path.
     CaptureHandle child, job, outRead, errRead;
     bool outEof = false, errEof = false;
+    std::string stopDiagnostic;
 
     bool start(const std::string& exe, const std::vector<std::string>& args,
                FILE* input, const std::optional<std::map<std::string, std::string>>& environment,
@@ -742,16 +743,30 @@ struct ContainedCapture {
     }
 
     bool stop() {
-        if (!TerminateJobObject(job.value, 1)) return false;
+        auto fail = [&](const char* operation) {
+            const auto error = GetLastError();
+            stopDiagnostic = std::string(operation) + " failed (Win32 " +
+                             std::to_string(error) + ")";
+            return false;
+        };
+        if (!TerminateJobObject(job.value, 1)) return fail("TerminateJobObject");
         const auto deadline = CaptureClock::now() + std::chrono::seconds(5);
         do {
             JOBOBJECT_BASIC_ACCOUNTING_INFORMATION accounting{};
             if (!QueryInformationJobObject(job.value, JobObjectBasicAccountingInformation,
-                    &accounting, sizeof(accounting), nullptr)) return false;
-            if (accounting.ActiveProcesses == 0)
-                return WaitForSingleObject(child.value, 0) == WAIT_OBJECT_0;
+                    &accounting, sizeof(accounting), nullptr))
+                return fail("QueryInformationJobObject");
+            const DWORD childState = WaitForSingleObject(child.value, 0);
+            if (childState == WAIT_FAILED) return fail("WaitForSingleObject");
+            // Termination is asynchronous. Job accounting can reach zero
+            // before the leader's process handle becomes signaled, especially
+            // for cmd.exe launchers waiting on another process. Both conditions
+            // must converge within the same cleanup deadline.
+            if (accounting.ActiveProcesses == 0 && childState == WAIT_OBJECT_0)
+                return true;
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         } while (CaptureClock::now() < deadline);
+        stopDiagnostic = "capture Job Object/process exit exceeded cleanup deadline";
         return false;
     }
 };
@@ -993,7 +1008,12 @@ BoundedProcessResult runBoundedCapture(const std::string& executable,
         if (!progress) std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     if (!process.stop()) {
-        captureFailure(result, ProcessCaptureFailure::CleanupFailed, "cannot terminate captured process group/job");
+        std::string diagnostic = "cannot terminate captured process group/job";
+#ifdef _WIN32
+        diagnostic += ": " + process.stopDiagnostic;
+#endif
+        if (!result.diagnostic.empty()) diagnostic += " (after " + result.diagnostic + ")";
+        captureFailure(result, ProcessCaptureFailure::CleanupFailed, diagnostic);
         return result;
     }
     // The leader may have exited with more than one buffer still queued. All

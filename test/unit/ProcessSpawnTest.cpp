@@ -313,6 +313,36 @@ TEST_F(LauncherOnPathTest, BoundedCaptureThroughBareNameLauncher) {
     EXPECT_EQ(r.stdoutOutput, "alpha\nbeta gamma\n");
 }
 
+TEST_F(LauncherOnPathTest, TimeoutRemainsTheFailureAfterLauncherTreeTerminates) {
+    // A Windows batch launcher is a cmd.exe leader plus the real tool. Repeat
+    // actual termination to exercise the job-accounting/process-signal race.
+    for (int attempt = 0; attempt < 8; ++attempt) {
+        SCOPED_TRACE(attempt);
+        plat::ProcessCaptureLimits limits;
+        limits.timeoutMs = 150;
+        const auto result = plat::runProcessCaptureBounded(
+            launcherName_, {"sleep", "30000"}, limits);
+        EXPECT_EQ(result.failure, plat::ProcessCaptureFailure::TimedOut) << result.diagnostic;
+        EXPECT_EQ(result.exitCode, -1);
+        EXPECT_NE(result.diagnostic.find("deadline"), std::string::npos);
+    }
+}
+
+TEST_F(LauncherOnPathTest, OutputLimitRemainsTheFailureAfterLauncherTreeTerminates) {
+    for (int attempt = 0; attempt < 8; ++attempt) {
+        SCOPED_TRACE(attempt);
+        plat::ProcessCaptureLimits limits;
+        limits.maxStderrBytes = 64;
+        const auto result = plat::runProcessCaptureBounded(
+            launcherName_, {"emit-bytes", "0", "16777216"}, limits);
+        EXPECT_EQ(result.failure, plat::ProcessCaptureFailure::OutputLimitExceeded)
+            << result.diagnostic;
+        EXPECT_EQ(result.exitCode, -1);
+        EXPECT_EQ(result.stderrOutput, std::string(64, 'e'));
+        EXPECT_NE(result.diagnostic.find("byte limit"), std::string::npos);
+    }
+}
+
 class DescendantCaptureTest : public ::testing::Test {
 protected:
     void SetUp() override {

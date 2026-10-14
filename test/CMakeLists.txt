@@ -87,6 +87,15 @@ if(TOPO_CORE_WITH_LANG)
     # not linked, hence the add_dependencies below.
     add_executable(topo-process-test-helper helpers/ProcessTestHelper.cpp)
     topo_set_compiler_flags(topo-process-test-helper)
+    # FixedEnvironmentReplacesInheritedValuesAtSpawn deliberately supplies an
+    # empty environment, including PATH. Keep this standalone fixture independent
+    # of compiler runtime DLL lookup so it reaches main under that real input.
+    if(MINGW)
+        target_link_options(topo-process-test-helper PRIVATE -static)
+    elseif(MSVC)
+        set_property(TARGET topo-process-test-helper PROPERTY MSVC_RUNTIME_LIBRARY
+            "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
 
     add_executable(topo-core-tests
         unit/ExternalTypeTest.cpp
