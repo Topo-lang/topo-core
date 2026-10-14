@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <chrono>
+#include <cerrno>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -17,10 +19,14 @@
 #include <mutex>
 #include <string>
 #include <system_error>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
 #ifdef _WIN32
+#  ifndef _WIN32_WINNT
+#    define _WIN32_WINNT 0x0601
+#  endif
 #  ifndef WIN32_LEAN_AND_MEAN
 #    define WIN32_LEAN_AND_MEAN
 #  endif
@@ -29,18 +35,29 @@
 #  endif
 #  include <windows.h>
 #  include <process.h> // _getpid
+#  include <io.h>
+#  include <fcntl.h>
 #else
+#  include <fcntl.h>
+#  include <signal.h>
+#  include <spawn.h>
+#  include <sys/wait.h>
 #  include <unistd.h>  // getpid
+extern char** environ;
+#  ifdef __APPLE__
+#    include <libproc.h>
+#  endif
 #endif
 
 namespace topo::platform {
 
-// POSIX backend wraps reproc++ (third_party/reproc, MIT); on Windows EVERY
+// Legacy POSIX APIs wrap reproc++ (third_party/reproc, MIT); bounded capture
+// uses native process groups as described below. On Windows EVERY
 // spawn path (runProcess / runProcessCapture / PipedProcess) uses raw Win32
 // instead — reproc's Windows backend detects child exit and pipe EOF over
 // loopback sockets, and that notification is not reliably delivered for
 // MinGW children on GHA windows-2022, hanging even instant-exit processes.
-// Public Process.h surface unchanged; the Windows-/POSIX-specific private
+// The Windows-/POSIX-specific private
 // fields on PipedProcess are vestigial after this refactor (kept for ABI,
 // retire in a future break).
 // Behavior preserved (covered by ctest):
@@ -537,6 +554,455 @@ CapturedProcessResult runCapture(const std::string& exe,
 #endif // _WIN32
 }
 
+// Bounded one-shot capture deliberately uses native process containment:
+// reproc 14.2.7 only signals the direct POSIX pid and has no process-group
+// option. It also uses Windows socket notification (see the legacy path).
+using CaptureClock = std::chrono::steady_clock;
+
+void captureFailure(BoundedProcessResult& result, ProcessCaptureFailure failure,
+                    const std::string& diagnostic) {
+    result.exitCode = -1;
+    result.failure = failure;
+    result.diagnostic = diagnostic;
+}
+
+bool appendBounded(BoundedProcessResult& result, std::string& output,
+                   const char* bytes, size_t count, size_t limit,
+                   const char* stream) {
+    const size_t kept = std::min(count, limit - output.size());
+    output.append(bytes, kept);
+    if (kept == count) return true;
+    captureFailure(result, ProcessCaptureFailure::OutputLimitExceeded,
+                   std::string(stream) + " exceeds capture byte limit");
+    return false;
+}
+
+#ifdef _WIN32
+
+struct CaptureHandle {
+    HANDLE value = nullptr;
+    CaptureHandle() = default;
+    CaptureHandle(const CaptureHandle&) = delete;
+    CaptureHandle& operator=(const CaptureHandle&) = delete;
+    ~CaptureHandle() { reset(); }
+    void reset() {
+        if (value && value != INVALID_HANDLE_VALUE) CloseHandle(value);
+        value = nullptr;
+    }
+};
+
+FILE* createCaptureInput() {
+    // MSVC tmpfile() uses the volume root and can require administrator
+    // rights. Create privately in the platform temp directory instead,
+    // retaining the original handle: CREATE_NEW rejects existing paths,
+    // share=0 prevents other opens, and deletion happens on the last close.
+    for (int attempt = 0; attempt < 100; ++attempt) {
+        CaptureHandle file;
+        file.value = CreateFileW(utf8ToWide(makeCaptureTempPath("input")).c_str(),
+            GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+            FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE, nullptr);
+        if (file.value == INVALID_HANDLE_VALUE) {
+            if (GetLastError() == ERROR_FILE_EXISTS || GetLastError() == ERROR_ALREADY_EXISTS) continue;
+            return nullptr;
+        }
+        const int fd = _open_osfhandle(reinterpret_cast<intptr_t>(file.value),
+                                       _O_BINARY | _O_RDWR | _O_NOINHERIT);
+        if (fd < 0) return nullptr;
+        file.value = nullptr; // fd owns the same handle; no path reopen.
+        FILE* stream = _fdopen(fd, "w+b");
+        if (!stream) _close(fd);
+        return stream;
+    }
+    return nullptr;
+}
+
+struct ContainedCapture {
+    // Closing the job is also the exception-safe kill path.
+    CaptureHandle child, job, outRead, errRead;
+    bool outEof = false, errEof = false;
+
+    bool start(const std::string& exe, const std::vector<std::string>& args,
+               FILE* input, const std::optional<std::map<std::string, std::string>>& environment,
+               std::string& diagnostic) {
+        job.value = CreateJobObjectW(nullptr, nullptr);
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        if (!job.value || !SetInformationJobObject(job.value,
+                JobObjectExtendedLimitInformation, &limits, sizeof(limits))) {
+            diagnostic = "cannot establish capture Job Object";
+            return false;
+        }
+        std::wstring command = buildSpawnCommandLineW(exe, args);
+        std::lock_guard<std::mutex> lock(spawnMutex());
+        SECURITY_ATTRIBUTES sa{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
+        CaptureHandle outWrite, errWrite, inRead, thread;
+        if (!CreatePipe(&outRead.value, &outWrite.value, &sa, 16 * 1024) ||
+            !CreatePipe(&errRead.value, &errWrite.value, &sa, 16 * 1024) ||
+            !SetHandleInformation(outRead.value, HANDLE_FLAG_INHERIT, 0) ||
+            !SetHandleInformation(errRead.value, HANDLE_FLAG_INHERIT, 0) ||
+            !DuplicateHandle(GetCurrentProcess(),
+                reinterpret_cast<HANDLE>(_get_osfhandle(_fileno(input))),
+                GetCurrentProcess(), &inRead.value, 0, TRUE,
+                DUPLICATE_SAME_ACCESS)) {
+            diagnostic = "cannot create bounded capture handles";
+            return false;
+        }
+        // Limit inheritance to these three handles, even if other libraries
+        // create inheritable handles outside this TU's spawn lock. This is
+        // the same Win32 attribute mechanism used by reproc's backend.
+        SIZE_T bytes = 0;
+        InitializeProcThreadAttributeList(nullptr, 1, 0, &bytes);
+        std::vector<unsigned char> storage(bytes);
+        auto* attributes = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(storage.data());
+        if (!InitializeProcThreadAttributeList(attributes, 1, 0, &bytes)) {
+            diagnostic = "cannot initialize capture handle list";
+            return false;
+        }
+        struct DeleteAttributes {
+            LPPROC_THREAD_ATTRIBUTE_LIST value;
+            ~DeleteAttributes() { DeleteProcThreadAttributeList(value); }
+        } cleanup{attributes};
+        HANDLE handles[] = {inRead.value, outWrite.value, errWrite.value};
+        if (!UpdateProcThreadAttribute(attributes, 0,
+                PROC_THREAD_ATTRIBUTE_HANDLE_LIST, handles, sizeof(handles),
+                nullptr, nullptr)) {
+            diagnostic = "cannot restrict capture handle inheritance";
+            return false;
+        }
+        STARTUPINFOEXW si{};
+        si.StartupInfo.cb = sizeof(si);
+        si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+        si.StartupInfo.hStdInput = inRead.value;
+        si.StartupInfo.hStdOutput = outWrite.value;
+        si.StartupInfo.hStdError = errWrite.value;
+        si.lpAttributeList = attributes;
+        PROCESS_INFORMATION pi{};
+        std::vector<wchar_t> environmentBlock;
+        if (environment) {
+            std::vector<std::wstring> entries;
+            for (const auto& entry : *environment)
+                entries.push_back(utf8ToWide(entry.first + "=" + entry.second));
+            std::sort(entries.begin(), entries.end(), [](const auto& left, const auto& right) {
+                return CompareStringOrdinal(left.c_str(), -1, right.c_str(), -1, TRUE) == CSTR_LESS_THAN;
+            });
+            for (const auto& wide : entries) {
+                environmentBlock.insert(environmentBlock.end(), wide.begin(), wide.end());
+                environmentBlock.push_back(L'\0');
+            }
+            if (environmentBlock.empty()) environmentBlock.push_back(L'\0');
+            environmentBlock.push_back(L'\0');
+        }
+        if (!CreateProcessW(nullptr, command.data(), nullptr, nullptr, TRUE,
+                CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT,
+                environment ? environmentBlock.data() : nullptr,
+                nullptr, &si.StartupInfo, &pi)) {
+            diagnostic = "cannot start bounded capture process (" +
+                         std::to_string(GetLastError()) + ")";
+            return false;
+        }
+        child.value = pi.hProcess;
+        thread.value = pi.hThread;
+        // Suspended creation closes the race in which a launcher could spawn
+        // an uncontained descendant before AssignProcessToJobObject.
+        if (!AssignProcessToJobObject(job.value, child.value) ||
+            ResumeThread(thread.value) == static_cast<DWORD>(-1)) {
+            TerminateProcess(child.value, 1);
+            WaitForSingleObject(child.value, 5000);
+            diagnostic = "cannot attach/resume capture process in Job Object";
+            return false;
+        }
+        return true;
+    }
+
+    int read(bool errorStream, char* buffer, size_t size) {
+        HANDLE pipe = errorStream ? errRead.value : outRead.value;
+        bool& eof = errorStream ? errEof : outEof;
+        if (eof) return 0;
+        DWORD available = 0, count = 0;
+        if (!PeekNamedPipe(pipe, nullptr, 0, nullptr, &available, nullptr)) {
+            if (GetLastError() == ERROR_BROKEN_PIPE) { eof = true; return 0; }
+            return -1;
+        }
+        if (!available) return 0;
+        if (!ReadFile(pipe, buffer, static_cast<DWORD>(std::min<size_t>(size, available)),
+                      &count, nullptr)) {
+            if (GetLastError() == ERROR_BROKEN_PIPE) { eof = true; return 0; }
+            return -1;
+        }
+        return static_cast<int>(count);
+    }
+
+    bool exited(int& status, bool& error) {
+        const DWORD wait = WaitForSingleObject(child.value, 0);
+        if (wait == WAIT_TIMEOUT) return false;
+        DWORD code = 0;
+        error = wait != WAIT_OBJECT_0 || !GetExitCodeProcess(child.value, &code);
+        status = static_cast<int>(code);
+        return !error;
+    }
+
+    bool stop() {
+        if (!TerminateJobObject(job.value, 1)) return false;
+        const auto deadline = CaptureClock::now() + std::chrono::seconds(5);
+        do {
+            JOBOBJECT_BASIC_ACCOUNTING_INFORMATION accounting{};
+            if (!QueryInformationJobObject(job.value, JobObjectBasicAccountingInformation,
+                    &accounting, sizeof(accounting), nullptr)) return false;
+            if (accounting.ActiveProcesses == 0)
+                return WaitForSingleObject(child.value, 0) == WAIT_OBJECT_0;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        } while (CaptureClock::now() < deadline);
+        return false;
+    }
+};
+
+#else
+
+struct CaptureFd {
+    int value = -1;
+    CaptureFd() = default;
+    CaptureFd(const CaptureFd&) = delete;
+    CaptureFd& operator=(const CaptureFd&) = delete;
+    ~CaptureFd() { reset(); }
+    void reset() { if (value >= 0) ::close(value); value = -1; }
+};
+
+FILE* createCaptureInput() { return std::tmpfile(); }
+
+struct ContainedCapture {
+    pid_t child = -1;
+    CaptureFd outRead, errRead;
+    bool outEof = false, errEof = false;
+    ~ContainedCapture() {
+        if (child > 0) {
+            ::kill(-child, SIGKILL);
+            ::waitpid(child, nullptr, WNOHANG);
+        }
+    }
+
+    bool start(const std::string& exe, const std::vector<std::string>& args,
+               FILE* input, const std::optional<std::map<std::string, std::string>>& environment,
+               std::string& diagnostic) {
+        CaptureFd outWrite, errWrite;
+        auto pipe = [](CaptureFd& reader, CaptureFd& writer) {
+            int fds[2];
+            if (::pipe(fds) != 0) return false;
+            reader.value = fds[0]; writer.value = fds[1];
+            // Keep both ends out of unrelated execs. Only the parent reads
+            // nonblocking; the child's writer retains normal backpressure.
+            return ::fcntl(fds[0], F_SETFD, FD_CLOEXEC) == 0 &&
+                   ::fcntl(fds[1], F_SETFD, FD_CLOEXEC) == 0 &&
+                   ::fcntl(fds[0], F_SETFL, O_NONBLOCK) == 0;
+        };
+        if (!pipe(outRead, outWrite) || !pipe(errRead, errWrite)) {
+            diagnostic = "cannot create bounded capture pipes";
+            return false;
+        }
+        auto argv = buildArgv(exe, args);
+        std::vector<char*> raw;
+        for (auto& arg : argv) raw.push_back(arg.data());
+        raw.push_back(nullptr);
+        posix_spawn_file_actions_t actions;
+        posix_spawnattr_t attr;
+        int error = posix_spawn_file_actions_init(&actions);
+        if (error) { diagnostic = "cannot initialize capture file actions"; return false; }
+        error = posix_spawnattr_init(&attr);
+        if (error) {
+            posix_spawn_file_actions_destroy(&actions);
+            diagnostic = "cannot initialize capture spawn attributes";
+            return false;
+        }
+        // A pgroup value of zero creates a fresh group led by the child.
+        // This happens before exec, so ordinary descendants inherit it.
+        short captureFlags = POSIX_SPAWN_SETPGROUP;
+#ifdef __APPLE__
+        // An inherited descriptor can retain file/network access authorized
+        // before Seatbelt application. Atomically inherit only the stdio fds
+        // named by the dup2 actions, even when unrelated libraries open fds.
+        captureFlags |= POSIX_SPAWN_CLOEXEC_DEFAULT;
+#endif
+        error = posix_spawnattr_setflags(&attr, captureFlags);
+        if (!error) error = posix_spawnattr_setpgroup(&attr, 0);
+        if (!error) error = posix_spawn_file_actions_adddup2(&actions, fileno(input), STDIN_FILENO);
+        if (!error) error = posix_spawn_file_actions_adddup2(&actions, outWrite.value, STDOUT_FILENO);
+        if (!error) error = posix_spawn_file_actions_adddup2(&actions, errWrite.value, STDERR_FILENO);
+        std::vector<std::string> environmentStrings;
+        std::vector<char*> environmentPointers;
+        if (environment) {
+            for (const auto& entry : *environment)
+                environmentStrings.push_back(entry.first + "=" + entry.second);
+            for (auto& entry : environmentStrings) environmentPointers.push_back(entry.data());
+            environmentPointers.push_back(nullptr);
+        }
+        if (!error) error = posix_spawnp(&child, exe.c_str(), &actions, &attr,
+                raw.data(), environment ? environmentPointers.data() : environ);
+        posix_spawnattr_destroy(&attr);
+        posix_spawn_file_actions_destroy(&actions);
+        if (error) {
+            child = -1;
+            diagnostic = "cannot start bounded capture process: " +
+                         std::error_code(error, std::generic_category()).message();
+            return false;
+        }
+        return true;
+    }
+
+    int read(bool errorStream, char* buffer, size_t size) {
+        const int fd = errorStream ? errRead.value : outRead.value;
+        bool& eof = errorStream ? errEof : outEof;
+        if (eof) return 0;
+        const ssize_t count = ::read(fd, buffer, size);
+        if (count == 0) { eof = true; return 0; }
+        if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) return 0;
+        return static_cast<int>(count);
+    }
+
+    bool exited(int& status, bool& error) {
+        siginfo_t info{};
+        // Observe without reaping: the pid/group id cannot be reused until
+        // stop() signals the group, even when the direct child exits first.
+        if (::waitid(P_PID, static_cast<id_t>(child), &info, WEXITED | WNOHANG | WNOWAIT) != 0) {
+            error = errno != EINTR;
+            return false;
+        }
+        if (info.si_pid == 0) return false;
+        status = info.si_code == CLD_EXITED ? info.si_status : 128 + info.si_status;
+        return true;
+    }
+
+    bool stop() {
+        const auto deadline = CaptureClock::now() + std::chrono::seconds(5);
+        bool killed = false;
+        do {
+            killed = ::kill(-child, SIGKILL) == 0 || errno == ESRCH;
+#ifdef __APPLE__
+            // Darwin may report EPERM while the last member is exiting or
+            // when the group consists solely of its zombie leader. Accept
+            // only the latter verified state; retry the short exit race.
+            if (!killed && errno == EPERM) {
+                int status = -1;
+                bool error = false;
+                pid_t members[2] = {};
+                // Two slots are intentional: accepting exactly one full pid
+                // can never mistake a truncated group (>= two) for a singleton.
+                if (exited(status, error) && !error &&
+                    proc_listpids(PROC_PGRP_ONLY, static_cast<uint32_t>(child),
+                        members, sizeof(members)) == sizeof(pid_t) && members[0] == child)
+                    killed = true;
+                if (error) return false;
+            } else if (!killed) {
+                return false;
+            }
+#else
+            if (!killed) return false;
+#endif
+            if (!killed) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        } while (!killed && CaptureClock::now() < deadline);
+        if (!killed) return false;
+        do {
+            const pid_t waited = ::waitpid(child, nullptr, WNOHANG);
+            if (waited == child) { child = -1; return true; }
+            if (waited < 0 && errno != EINTR) return false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        } while (CaptureClock::now() < deadline);
+        return false;
+    }
+};
+#endif
+
+BoundedProcessResult runBoundedCapture(const std::string& executable,
+                                      const std::vector<std::string>& args,
+                                      const ProcessCaptureLimits& limits) {
+    BoundedProcessResult result;
+    if (limits.timeoutMs <= 0 || limits.stdinInput.size() > limits.maxStdinBytes) {
+        captureFailure(result, ProcessCaptureFailure::InvalidLimits,
+                       "capture requires a positive deadline and input within its byte limit");
+        return result;
+    }
+    if (limits.environment) {
+        for (const auto& entry : *limits.environment) {
+            if (entry.first.empty() || entry.first.find('=') != std::string::npos ||
+                entry.first.find('\0') != std::string::npos || entry.second.find('\0') != std::string::npos) {
+                captureFailure(result, ProcessCaptureFailure::InvalidLimits,
+                               "capture environment contains an invalid name or value");
+                return result;
+            }
+        }
+    }
+    // Create a private file and expose only its handle to the child.
+    // Its size is bounded before writing; no child-controlled output goes to
+    // disk. Holding it open gives stable bytes and avoids a path-reopen race.
+    std::unique_ptr<FILE, decltype(&std::fclose)> input(createCaptureInput(), &std::fclose);
+    if (!input) {
+        captureFailure(result, ProcessCaptureFailure::StartFailed, "cannot stage capture stdin");
+        return result;
+    }
+#ifdef _WIN32
+    if (!SetHandleInformation(reinterpret_cast<HANDLE>(_get_osfhandle(_fileno(input.get()))),
+                              HANDLE_FLAG_INHERIT, 0)) {
+#else
+    if (::fcntl(fileno(input.get()), F_SETFD, FD_CLOEXEC) != 0) {
+#endif
+        captureFailure(result, ProcessCaptureFailure::StartFailed, "cannot restrict capture stdin inheritance");
+        return result;
+    }
+    if (std::fwrite(limits.stdinInput.data(), 1, limits.stdinInput.size(), input.get()) !=
+            limits.stdinInput.size() || std::fflush(input.get()) != 0 ||
+            std::fseek(input.get(), 0, SEEK_SET) != 0) {
+        captureFailure(result, ProcessCaptureFailure::StartFailed, "cannot write capture stdin");
+        return result;
+    }
+    ContainedCapture process;
+    if (!process.start(executable, args, input.get(), limits.environment, result.diagnostic)) {
+        result.failure = ProcessCaptureFailure::StartFailed;
+        return result;
+    }
+    const auto deadline = CaptureClock::now() + std::chrono::milliseconds(limits.timeoutMs);
+    char buffer[16 * 1024];
+    auto drainOnce = [&]() {
+        bool progress = false;
+        for (const bool errorStream : {false, true}) {
+            const int count = process.read(errorStream, buffer, sizeof(buffer));
+            if (count < 0) {
+                captureFailure(result, ProcessCaptureFailure::IoError, "cannot read captured process output");
+                return false;
+            }
+            if (count == 0) continue;
+            progress = true;
+            if (!appendBounded(result, errorStream ? result.stderrOutput : result.stdoutOutput,
+                    buffer, static_cast<size_t>(count),
+                    errorStream ? limits.maxStderrBytes : limits.maxStdoutBytes,
+                    errorStream ? "stderr" : "stdout")) return false;
+        }
+        return progress;
+    };
+    while (true) {
+        const bool progress = drainOnce();
+        if (result.failure != ProcessCaptureFailure::None) break;
+        int status = -1;
+        bool error = false;
+        if (process.exited(status, error)) { result.exitCode = status; break; }
+        if (error) {
+            captureFailure(result, ProcessCaptureFailure::IoError, "cannot observe captured process exit");
+            break;
+        }
+        if (CaptureClock::now() >= deadline) {
+            captureFailure(result, ProcessCaptureFailure::TimedOut, "captured process exceeded deadline");
+            break;
+        }
+        if (!progress) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    if (!process.stop()) {
+        captureFailure(result, ProcessCaptureFailure::CleanupFailed, "cannot terminate captured process group/job");
+        return result;
+    }
+    // The leader may have exited with more than one buffer still queued. All
+    // its bytes were written before the exit observation. Drain ready bytes
+    // without waiting on EOF held open by a POSIX descendant that escaped.
+    while (result.failure == ProcessCaptureFailure::None && drainOnce()) {}
+    return result;
+}
+
 } // namespace
 
 // --- runProcess (fire-and-forget) ---
@@ -591,6 +1057,13 @@ CapturedProcessResult runProcessCaptureWithTimeout(
     int timeoutMs, bool verbose) {
     logCommand(verbose, executable, args, /*workingDir=*/{}, timeoutMs);
     return runCapture(executable, args, {}, timeoutMs);
+}
+
+BoundedProcessResult runProcessCaptureBounded(
+    const std::string& executable, const std::vector<std::string>& args,
+    const ProcessCaptureLimits& limits, bool verbose) {
+    logCommand(verbose, executable, args, {}, limits.timeoutMs);
+    return runBoundedCapture(executable, args, limits);
 }
 
 // PipedProcess — bidirectional stdin/stdout pipes. POSIX rides

@@ -17,15 +17,66 @@
 //                     "unresponsive" child for stop()-escalation tests)
 
 #include <chrono>
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <thread>
 
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
+#include <windows.h>
+#else
+#include <unistd.h>
 #endif
+
+namespace {
+
+int emitBytes(size_t outBytes, size_t errBytes) {
+    const std::string out(4096, 'o'), err(4096, 'e');
+    while (outBytes || errBytes) {
+        const size_t on = std::min(outBytes, out.size());
+        const size_t en = std::min(errBytes, err.size());
+        if (on && std::fwrite(out.data(), 1, on, stdout) != on) return 1;
+        if (en && std::fwrite(err.data(), 1, en, stderr) != en) return 1;
+        outBytes -= on;
+        errBytes -= en;
+    }
+    std::fflush(stdout);
+    std::fflush(stderr);
+    return 0;
+}
+
+bool spawnDelayedWriter(char** argv) {
+#ifdef _WIN32
+    // Fixture paths never contain quotes, and all tokens are quoted so
+    // temporary directories containing spaces work on Windows as well.
+    std::string command = "\"" + std::string(argv[0]) + "\" delayed-write";
+    for (int i = 2; i < 5; ++i) command += " \"" + std::string(argv[i]) + "\"";
+    STARTUPINFOA si{};
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi{};
+    if (!CreateProcessA(nullptr, command.data(), nullptr, nullptr, TRUE,
+                        0, nullptr, nullptr, &si, &pi)) return false;
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    return true;
+#else
+    const pid_t child = fork();
+    if (child < 0) return false;
+    if (child == 0) {
+        execl(argv[0], argv[0], "delayed-write", argv[2], argv[3], argv[4],
+              static_cast<char*>(nullptr));
+        _exit(127);
+    }
+    return true;
+#endif
+}
+
+} // namespace
 
 int main(int argc, char** argv) {
 #ifdef _WIN32
@@ -66,6 +117,12 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+    if (mode == "environment" && argc == 3) {
+        const char* value = std::getenv(argv[2]);
+        if (value) std::puts(value);
+        return value ? 0 : 7;
+    }
+
     if (mode == "exit") {
         return argc > 2 ? std::atoi(argv[2]) : 0;
     }
@@ -73,6 +130,35 @@ int main(int argc, char** argv) {
     if (mode == "sleep") {
         const long ms = argc > 2 ? std::atol(argv[2]) : 1000;
         std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+        return 0;
+    }
+
+    if (mode == "emit-bytes" && argc == 4) {
+        return emitBytes(std::strtoull(argv[2], nullptr, 10),
+                         std::strtoull(argv[3], nullptr, 10));
+    }
+
+    if (mode == "delayed-write" && argc == 5) {
+        { std::ofstream ready(argv[2]); ready << "running\n"; }
+        std::this_thread::sleep_for(std::chrono::milliseconds(std::atol(argv[4])));
+        std::ofstream sentinel(argv[3]);
+        sentinel << "descendant executed\n";
+        return sentinel ? 0 : 1;
+    }
+
+    if (mode == "spawn-descendant" && argc == 6) {
+        if (!spawnDelayedWriter(argv)) return 3;
+        const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!std::filesystem::exists(argv[2])) {
+            if (std::chrono::steady_clock::now() >= until) return 4;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        std::fputs("descendant-ready\n", stdout);
+        std::fflush(stdout);
+        const std::string action = argv[5];
+        if (action == "exit") return 0;
+        if (action == "flood") return emitBytes(64 * 1024 * 1024, 0);
+        std::this_thread::sleep_for(std::chrono::seconds(30));
         return 0;
     }
 

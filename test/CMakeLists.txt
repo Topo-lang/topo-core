@@ -26,6 +26,20 @@ target_link_libraries(topo-evidence-tests PRIVATE TopoCheck TopoDistribution GTe
 topo_set_compiler_flags(topo-evidence-tests)
 gtest_discover_tests(topo-evidence-tests DISCOVERY_MODE PRE_TEST)
 
+# OS analysis isolation belongs to standalone topo-core as well.
+add_executable(topo-analysis-test-helper helpers/AnalysisProcessTestHelper.cpp)
+target_link_libraries(topo-analysis-test-helper PRIVATE TopoPlatform)
+topo_set_compiler_flags(topo-analysis-test-helper)
+add_executable(topo-analysis-process-tests unit/AnalysisProcessTest.cpp)
+target_link_libraries(topo-analysis-process-tests PRIVATE TopoPlatform GTest::gtest_main)
+target_compile_definitions(topo-analysis-process-tests PRIVATE
+    TOPO_ANALYSIS_TEST_HELPER="$<TARGET_FILE:topo-analysis-test-helper>")
+add_dependencies(topo-analysis-process-tests topo-analysis-test-helper)
+topo_set_compiler_flags(topo-analysis-process-tests)
+gtest_discover_tests(topo-analysis-process-tests DISCOVERY_TIMEOUT 30
+    PROPERTIES LABELS "toolchain\;core\;isolation" TIMEOUT 120)
+
+
 if(TOPO_CORE_WITH_LANG)
     add_executable(topo-execution-evidence-tests unit/ExecutionEvidenceTest.cpp unit/IncrementalEvidenceCacheTest.cpp)
     target_link_libraries(topo-execution-evidence-tests PRIVATE TopoBuildLib GTest::gtest_main)

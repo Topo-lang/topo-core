@@ -2,6 +2,9 @@
 #define TOPO_PLATFORM_PROCESS_H
 
 #include <atomic>
+#include <cstddef>
+#include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -44,6 +47,52 @@ CapturedProcessResult runProcessCaptureWithTimeout(const std::string& executable
                                                    const std::vector<std::string>& args,
                                                    int timeoutMs,
                                                    bool verbose = false);
+
+// Explicit limits for one-shot analysis tools. Zero bytes permits only an
+// empty stream; timeoutMs must be positive. Limits are per stream.
+struct ProcessCaptureLimits {
+    int timeoutMs = 30000;
+    size_t maxStdoutBytes = 32 * 1024 * 1024;
+    size_t maxStderrBytes = 1024 * 1024;
+    size_t maxStdinBytes = 8 * 1024 * 1024;
+    // One-shot input is size-checked and staged in a private temporary
+    // file before spawning, so a child that never reads stdin cannot block
+    // an input writer. Empty input gives immediate EOF.
+    std::string stdinInput = {};
+    // nullopt preserves the caller's environment. An engaged map replaces
+    // it completely, including an empty map for an empty environment.
+    std::optional<std::map<std::string, std::string>> environment = {};
+};
+
+enum class ProcessCaptureFailure {
+    None,
+    InvalidLimits,
+    StartFailed,
+    TimedOut,
+    OutputLimitExceeded,
+    IoError,
+    CleanupFailed,
+};
+
+struct BoundedProcessResult : CapturedProcessResult {
+    ProcessCaptureFailure failure = ProcessCaptureFailure::None;
+    std::string diagnostic;
+};
+
+// Capture through pipes with finite OS buffers, retaining at most the given
+// byte limits (no output temp files). A limit, timeout, spawn/I/O or cleanup
+// failure sets exitCode=-1 and failure/diagnostic; partial output is retained.
+// Normal tool failures retain the child's exit code and failure=None.
+// All normal descendants are terminated before returning, including when the
+// direct child exits first: POSIX uses a fresh process group; Windows starts
+// suspended, assigns a kill-on-close Job Object, then resumes. Failure to
+// establish this containment prevents execution. This is process lifecycle
+// management, not an OS sandbox: POSIX descendants may escape with setsid or
+// setpgid, and filesystem, network, CPU and child memory remain unrestricted.
+BoundedProcessResult runProcessCaptureBounded(const std::string& executable,
+                                              const std::vector<std::string>& args,
+                                              const ProcessCaptureLimits& limits,
+                                              bool verbose = false);
 
 // Long-lived subprocess with bidirectional stdin/stdout pipes.
 // Used by ClangdBridge for JSON-RPC communication.

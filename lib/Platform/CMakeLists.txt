@@ -1,5 +1,6 @@
 add_library(TopoPlatform
     Process.cpp
+    AnalysisProcess.cpp
     ToolResolution.cpp
     FileGlob.cpp
     SharedLibrary.cpp
@@ -60,3 +61,25 @@ install(DIRECTORY ${PROJECT_SOURCE_DIR}/include/topo/Platform
     COMPONENT topo-core-frontend
     FILES_MATCHING PATTERN "*.h"
 )
+
+option(TOPO_ENABLE_EXPERIMENTAL_LINUX_ANALYSIS
+    "Build experimental Linux resource-isolation API (does not enable strict audit capability)" OFF)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TOPO_ENABLE_EXPERIMENTAL_LINUX_ANALYSIS)
+    target_sources(TopoPlatform PRIVATE LinuxAnalysisSandbox.cpp)
+    target_compile_definitions(TopoPlatform PUBLIC TOPO_ENABLE_EXPERIMENTAL_LINUX_ANALYSIS=1)
+endif()
+
+# A native entry marker establishes that this invocation has entered the OS sandbox.
+# The launcher uses only the system runtime and receives the fixed environment.
+if(APPLE OR (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TOPO_ENABLE_EXPERIMENTAL_LINUX_ANALYSIS))
+    add_executable(topo-analysis-launcher AnalysisLauncher.cpp)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_sources(topo-analysis-launcher PRIVATE LinuxAnalysisSandbox.cpp)
+    endif()
+    topo_set_compiler_flags(topo-analysis-launcher)
+    target_compile_definitions(TopoPlatform PRIVATE
+        TOPO_ANALYSIS_LAUNCHER_PATH="$<TARGET_FILE:topo-analysis-launcher>"
+        TOPO_ANALYSIS_INSTALLED_LAUNCHER_PATH="${CMAKE_INSTALL_PREFIX}/bin/topo-analysis-launcher")
+    add_dependencies(TopoPlatform topo-analysis-launcher)
+    install(TARGETS topo-analysis-launcher COMPONENT topo-core-frontend RUNTIME DESTINATION bin)
+endif()

@@ -6,9 +6,11 @@
 #include <gtest/gtest.h>
 
 #include <cstdlib>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #ifdef _WIN32
@@ -215,4 +217,200 @@ TEST_F(LauncherOnPathTest, CaptureThroughBareNameLauncherForwardsArgs) {
                                      {"echo-args", "alpha", "beta gamma"});
     ASSERT_EQ(r.exitCode, 0) << r.stderrOutput;
     EXPECT_EQ(r.stdoutOutput, "alpha\nbeta gamma\n");
+}
+
+TEST(ProcessBoundedCapture, NormalStreamsAndExitStatus) {
+    plat::ProcessCaptureLimits limits;
+    limits.maxStdoutBytes = 100003;
+    limits.maxStderrBytes = 70001;
+    const auto r = plat::runProcessCaptureBounded(
+        helperPath(), {"emit-bytes", "100003", "70001"}, limits);
+    EXPECT_EQ(r.failure, plat::ProcessCaptureFailure::None) << r.diagnostic;
+    EXPECT_EQ(r.exitCode, 0);
+    EXPECT_EQ(r.stdoutOutput, std::string(100003, 'o'));
+    EXPECT_EQ(r.stderrOutput, std::string(70001, 'e'));
+    const auto failed = plat::runProcessCaptureBounded(helperPath(), {"exit", "7"}, limits);
+    EXPECT_EQ(failed.failure, plat::ProcessCaptureFailure::None);
+    EXPECT_EQ(failed.exitCode, 7);
+}
+
+TEST(ProcessBoundedCapture, BothStreamsHaveIndependentCaps) {
+    plat::ProcessCaptureLimits limits;
+    limits.maxStdoutBytes = 17003;
+    limits.maxStderrBytes = 17003;
+    for (const bool stderrFlood : {false, true}) {
+        const auto r = plat::runProcessCaptureBounded(helperPath(),
+            {"emit-bytes", stderrFlood ? "0" : "67108864",
+                           stderrFlood ? "67108864" : "0"}, limits);
+        EXPECT_EQ(r.failure, plat::ProcessCaptureFailure::OutputLimitExceeded)
+            << r.diagnostic;
+        EXPECT_EQ(r.exitCode, -1);
+        EXPECT_EQ(stderrFlood ? r.stderrOutput : r.stdoutOutput,
+                  std::string(17003, stderrFlood ? 'e' : 'o'));
+        EXPECT_TRUE((stderrFlood ? r.stdoutOutput : r.stderrOutput).empty());
+    }
+}
+
+TEST(ProcessBoundedCapture, ZeroLimitAllowsOnlyEmptyOutput) {
+    plat::ProcessCaptureLimits limits;
+    limits.maxStdoutBytes = 0;
+    limits.maxStderrBytes = 0;
+    const auto empty = plat::runProcessCaptureBounded(helperPath(), {"exit", "0"}, limits);
+    EXPECT_EQ(empty.failure, plat::ProcessCaptureFailure::None);
+    EXPECT_EQ(empty.exitCode, 0);
+    const auto one = plat::runProcessCaptureBounded(helperPath(), {"emit-bytes", "1", "0"}, limits);
+    EXPECT_EQ(one.failure, plat::ProcessCaptureFailure::OutputLimitExceeded);
+    EXPECT_EQ(one.exitCode, -1);
+    EXPECT_TRUE(one.stdoutOutput.empty());
+}
+
+TEST(ProcessBoundedCapture, StdinRoundTripAndUnreadInputDeadline) {
+    plat::ProcessCaptureLimits limits;
+    limits.stdinInput = std::string(512 * 1024, 'x');
+    limits.stdinInput[32] = '\0';
+    limits.stdinInput[64] = '\n';
+    const auto echoed = plat::runProcessCaptureBounded(helperPath(), {"cat"}, limits);
+    EXPECT_EQ(echoed.failure, plat::ProcessCaptureFailure::None) << echoed.diagnostic;
+    EXPECT_EQ(echoed.exitCode, 0);
+    EXPECT_EQ(echoed.stdoutOutput, limits.stdinInput);
+    limits.timeoutMs = 100;
+    const auto start = std::chrono::steady_clock::now();
+    const auto stalled = plat::runProcessCaptureBounded(helperPath(), {"sleep", "30000"}, limits);
+    EXPECT_EQ(stalled.failure, plat::ProcessCaptureFailure::TimedOut);
+    EXPECT_EQ(stalled.exitCode, -1);
+    EXPECT_LT(std::chrono::steady_clock::now() - start, std::chrono::seconds(6));
+}
+
+TEST(ProcessBoundedCapture, RejectsInvalidLimitsBeforeSpawn) {
+    plat::ProcessCaptureLimits limits;
+    limits.timeoutMs = 0;
+    const auto noDeadline = plat::runProcessCaptureBounded(helperPath(), {"echo-args", "ran"}, limits);
+    EXPECT_EQ(noDeadline.failure, plat::ProcessCaptureFailure::InvalidLimits);
+    EXPECT_EQ(noDeadline.exitCode, -1);
+    EXPECT_TRUE(noDeadline.stdoutOutput.empty());
+    limits.timeoutMs = 100;
+    limits.maxStdinBytes = 1;
+    limits.stdinInput = "xx";
+    const auto input = plat::runProcessCaptureBounded(helperPath(), {"echo-args", "ran"}, limits);
+    EXPECT_EQ(input.failure, plat::ProcessCaptureFailure::InvalidLimits);
+    EXPECT_EQ(input.exitCode, -1);
+    EXPECT_TRUE(input.stdoutOutput.empty());
+}
+
+TEST(ProcessBoundedCapture, MissingToolFailsCleanly) {
+    const auto r = plat::runProcessCaptureBounded(
+        "topo-definitely-missing-tool-xyz", {}, plat::ProcessCaptureLimits{});
+    EXPECT_EQ(r.failure, plat::ProcessCaptureFailure::StartFailed);
+    EXPECT_EQ(r.exitCode, -1);
+    EXPECT_FALSE(r.diagnostic.empty());
+}
+
+TEST_F(LauncherOnPathTest, BoundedCaptureThroughBareNameLauncher) {
+    const auto r = plat::runProcessCaptureBounded(
+        launcherName_, {"echo-args", "alpha", "beta gamma"}, plat::ProcessCaptureLimits{});
+    EXPECT_EQ(r.failure, plat::ProcessCaptureFailure::None) << r.diagnostic;
+    EXPECT_EQ(r.exitCode, 0);
+    EXPECT_EQ(r.stdoutOutput, "alpha\nbeta gamma\n");
+}
+
+class DescendantCaptureTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        dir_ = plat::tempDirectory() / ("topo-descendant-test-" + std::to_string(currentPid()));
+        fs::create_directories(dir_);
+        ready_ = dir_ / "child.ready";
+        sentinel_ = dir_ / "child.sentinel";
+    }
+    void TearDown() override {
+        std::error_code ec;
+        fs::remove_all(dir_, ec);
+    }
+    std::vector<std::string> args(const std::string& action, int delay = 1800) {
+        return {"spawn-descendant", ready_.string(), sentinel_.string(), std::to_string(delay), action};
+    }
+    void checkStopped() {
+        // The ready file proves that the descendant really ran before its
+        // parent was stopped. Observe beyond its write deadline so a mere
+        // successful kill call cannot masquerade as lifecycle containment.
+        ASSERT_TRUE(fs::exists(ready_));
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+        EXPECT_FALSE(fs::exists(sentinel_));
+    }
+    fs::path dir_, ready_, sentinel_;
+};
+
+TEST_F(DescendantCaptureTest, FixtureReallyWritesSentinelWithoutContainment) {
+    const auto r = plat::runProcessCapture(helperPath(), args("exit", 50));
+    ASSERT_EQ(r.exitCode, 0);
+    ASSERT_TRUE(fs::exists(ready_));
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!fs::exists(sentinel_) && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    EXPECT_TRUE(fs::exists(sentinel_));
+}
+
+TEST_F(DescendantCaptureTest, TimeoutStopsOrdinaryDescendant) {
+    plat::ProcessCaptureLimits limits;
+    limits.timeoutMs = 1000;
+    const auto r = plat::runProcessCaptureBounded(helperPath(), args("wait"), limits);
+    EXPECT_EQ(r.failure, plat::ProcessCaptureFailure::TimedOut) << r.diagnostic;
+    EXPECT_EQ(r.exitCode, -1);
+    EXPECT_EQ(r.stdoutOutput, "descendant-ready\n");
+    checkStopped();
+}
+
+TEST_F(DescendantCaptureTest, ExitedLeaderStillStopsOrdinaryDescendant) {
+    const auto r = plat::runProcessCaptureBounded(helperPath(), args("exit"), plat::ProcessCaptureLimits{});
+    EXPECT_EQ(r.failure, plat::ProcessCaptureFailure::None) << r.diagnostic;
+    EXPECT_EQ(r.exitCode, 0);
+    EXPECT_EQ(r.stdoutOutput, "descendant-ready\n");
+    checkStopped();
+}
+
+TEST_F(DescendantCaptureTest, OutputLimitStopsOrdinaryDescendant) {
+    plat::ProcessCaptureLimits limits;
+    limits.maxStdoutBytes = 4096;
+    const auto r = plat::runProcessCaptureBounded(helperPath(), args("flood"), limits);
+    EXPECT_EQ(r.failure, plat::ProcessCaptureFailure::OutputLimitExceeded) << r.diagnostic;
+    EXPECT_EQ(r.exitCode, -1);
+    EXPECT_EQ(r.stdoutOutput.size(), 4096u);
+    checkStopped();
+}
+
+TEST(ProcessBoundedCapture, FixedEnvironmentReplacesInheritedValuesAtSpawn) {
+    constexpr const char* name = "TOPO_BOUNDED_ENVIRONMENT_TEST";
+    const char* original = std::getenv(name);
+    const std::string saved = original ? original : "";
+#ifdef _WIN32
+    _putenv_s(name, "ambient");
+#else
+    setenv(name, "ambient", 1);
+#endif
+    plat::ProcessCaptureLimits limits;
+    const auto inherited = plat::runProcessCaptureBounded(helperPath(), {"environment", name}, limits);
+    limits.environment = std::map<std::string, std::string>{{name, "fixed"}};
+    const auto fixed = plat::runProcessCaptureBounded(helperPath(), {"environment", name}, limits);
+    limits.environment = std::map<std::string, std::string>{};
+    const auto cleared = plat::runProcessCaptureBounded(helperPath(), {"environment", name}, limits);
+#ifdef _WIN32
+    _putenv_s(name, original ? saved.c_str() : "");
+#else
+    if (original) setenv(name, saved.c_str(), 1); else unsetenv(name);
+#endif
+    EXPECT_EQ(inherited.stdoutOutput, "ambient\n");
+    EXPECT_EQ(fixed.stdoutOutput, "fixed\n");
+    EXPECT_EQ(cleared.exitCode, 7);
+    EXPECT_TRUE(cleared.stdoutOutput.empty());
+}
+
+TEST(ProcessBoundedCapture, InvalidEnvironmentFailsBeforeSpawn) {
+    for (const auto& entry : std::vector<std::pair<std::string, std::string>>{
+            {"", "value"}, {"NAME=BAD", "value"}, {std::string("N\0X", 3), "value"},
+            {"NAME", std::string("v\0x", 3)}}) {
+        plat::ProcessCaptureLimits limits;
+        limits.environment = std::map<std::string, std::string>{entry};
+        const auto result = plat::runProcessCaptureBounded(helperPath(), {"echo-args", "executed"}, limits);
+        EXPECT_EQ(result.failure, plat::ProcessCaptureFailure::InvalidLimits);
+        EXPECT_TRUE(result.stdoutOutput.empty());
+    }
 }

@@ -1,5 +1,6 @@
 #include "topo/Check/Audit.h"
 #include "topo/Platform/TempFile.h"
+#include "topo/Distribution/Sha256.h"
 #include <gtest/gtest.h>
 #include <filesystem>
 #include <fstream>
@@ -59,11 +60,21 @@ protected:
         // can misclassify a directory reparse point as an ordinary directory.
         DeleteFileW((root / "selected.java").c_str());
         RemoveDirectoryW((root / "dependency" / "alias").c_str());
+        RemoveDirectoryW((root / "left" / "link").c_str());
 #endif
         std::error_code ec;
         fs::remove_all(root, ec);
     }
     void write(const std::string& p,const std::string& bytes) { std::ofstream(root/p) << bytes; }
+    std::error_code symlinkParentInputs() {
+        fs::create_directories(root / "left");
+        fs::create_directories(root / "right" / "nested");
+        write("left/value.h", "left input\n");
+        write("right/value.h", "right input\n");
+        facts.inputs = {(root / "left/link/../value.h").string(),
+                        (root / "left/value.h").string()};
+        return createAuditSymlink(root / "right/nested", root / "left/link", true);
+    }
     json report(const std::vector<std::string>& external={}) {
         return makeAuditReport(root.string(),facts,policy,external,{(root/"Log.java").string()},{});
     }
@@ -79,6 +90,23 @@ TEST_F(AuditTest, ChangedSourceInvalidatesApprovalAndSavedReport) {
     write("Log.java","class Log { void log() { hidden(); } }\n");
     std::string error; EXPECT_FALSE(verifyAuditSnapshot(r,error));
     auto fresh=report({"app::Log"}); applyAuditTrust(fresh,trust); EXPECT_FALSE(fresh["passed"].get<bool>());
+}
+TEST_F(AuditTest, ProviderDigestAndFinalVerificationBothRejectSameTimestampReplacement) {
+    const auto file = (root / "Log.java").string();
+    const auto time = fs::last_write_time(file);
+    facts.inputDigests[file] = topo::dist::sha256File(file);
+    write("Log.java", "class Log { void log() { hidden(); } }\n");
+    fs::last_write_time(file, time);
+    auto stale = report();
+    EXPECT_FALSE(stale["passed"].get<bool>());
+    EXPECT_FALSE(stale["unresolved"].empty());
+    facts.inputDigests[file] = topo::dist::sha256File(file);
+    auto fresh = report();
+    ASSERT_TRUE(fresh["passed"].get<bool>());
+    write("Log.java", "class Log { void log() { changed(); } }\n");
+    fs::last_write_time(file, time);
+    std::string error;
+    EXPECT_FALSE(verifyAuditSnapshot(fresh, error));
 }
 TEST_F(AuditTest, SameSimpleNameCannotSelectOrAuthorizeAnotherClass) {
     EXPECT_FALSE(report({"Log"})["passed"].get<bool>());
@@ -102,12 +130,12 @@ TEST_F(AuditTest, ManualClassIncludesLexicalNestedMembersButNotFreeFunctions) {
 }
 TEST_F(AuditTest, ThirdPartyIsOpaqueWithoutIndividualApproval) {
     write("lib.jar","binary dependency");
-    facts.dependencies.push_back({"library",(root/"lib.jar").string(),"1","",false});
+    facts.dependencies.push_back({"library",(root/"lib.jar").string(),"1","",false,"", ""});
     auto r=report(); EXPECT_TRUE(r["passed"].get<bool>());
     EXPECT_EQ(r["dependencies"][0]["analysis"],"dependency-opaque");
 }
 TEST_F(AuditTest, StrictDependencyApprovalIsScopedAndBytesBound) {
-    write("lib.jar","first binary"); facts.dependencies.push_back({"library",(root/"lib.jar").string(),"1","",false}); policy.strictDependencies=true;
+    write("lib.jar","first binary"); facts.dependencies.push_back({"library",(root/"lib.jar").string(),"1","",false,"", ""}); policy.strictDependencies=true;
     auto r=report(); auto key=r["dependencies"][0]["key"].get<std::string>();
     json trust={{"dependencies",{{key,{{"accepted",true},{"project","/another-project"}}}}}};
     applyAuditTrust(r,trust); EXPECT_FALSE(r["passed"].get<bool>());
@@ -115,13 +143,13 @@ TEST_F(AuditTest, StrictDependencyApprovalIsScopedAndBytesBound) {
     write("lib.jar","changed bytes"); r=report(); applyAuditTrust(r,trust); EXPECT_FALSE(r["passed"].get<bool>());
 }
 TEST_F(AuditTest, DenyWinsOverUserDependencyApproval) {
-    write("lib.jar","binary"); facts.dependencies.push_back({"library",(root/"lib.jar").string(),"1","",false}); policy.deny={"library"};
+    write("lib.jar","binary"); facts.dependencies.push_back({"library",(root/"lib.jar").string(),"1","",false,"", ""}); policy.deny={"library"};
     auto r=report(); auto key=r["dependencies"][0]["key"].get<std::string>();
     applyAuditTrust(r,{{"dependencies",{{key,{{"accepted",true},{"project",""}}}}}}); EXPECT_FALSE(r["passed"].get<bool>());
 }
 TEST_F(AuditTest, DependencyDirectoryAdditionInvalidatesSavedReport) {
     fs::create_directory(root/"classes"); write("classes/A.class","a");
-    facts.dependencies.push_back({"classes",(root/"classes").string(),"","",false});
+    facts.dependencies.push_back({"classes",(root/"classes").string(),"","",false,"", ""});
     auto r=report(); std::string error; ASSERT_TRUE(verifyAuditSnapshot(r,error)) << error;
     write("classes/Shadow.class","new"); EXPECT_FALSE(verifyAuditSnapshot(r,error));
 }
@@ -154,13 +182,109 @@ TEST_F(AuditTest, SymlinkRetargetingInvalidatesSavedInputs) {
     ASSERT_FALSE(created) << created.message();
     EXPECT_FALSE(verifyAuditSnapshot(r, error));
 }
+TEST_F(AuditTest, SymlinkParentSegmentsPreserveDistinctInputsAndManualIdentities) {
+    const auto created = symlinkParentInputs();
+    ASSERT_FALSE(created) << created.message();
+    const auto raw = root / "left/link/../value.h";
+    const auto direct = root / "left/value.h";
+    std::error_code ec;
+    const auto target = topo::platform::canonicalPath(raw, ec);
+    ASSERT_FALSE(ec) << ec.message();
+#ifndef _WIN32
+    // Win32 applies its own parent-segment rules. Always bind the native target;
+    // POSIX additionally demonstrates why lexical folding changes the file.
+    EXPECT_EQ(target, fs::canonical(root / "right/value.h"));
+    EXPECT_NE(target, fs::canonical(direct));
+#endif
+    facts.identities.push_back({"raw-value", "app::RawValue", "class", "", "", raw.string(), 1, "project", true});
+    facts.identities.push_back({"direct-value", "app::DirectValue", "class", "", "", direct.string(), 1, "project", true});
+    auto r = report({"app::RawValue", "app::DirectValue"});
+    json rawInputs = json::array(), directInputs = json::array();
+    for (const auto& input : r["inputs"]) {
+        if (input["path"] == raw.generic_string()) rawInputs.push_back(input);
+        if (input["path"] == direct.generic_string()) directInputs.push_back(input);
+    }
+    ASSERT_EQ(rawInputs.size(), 1u);
+    ASSERT_EQ(directInputs.size(), 1u);
+    EXPECT_EQ(rawInputs[0]["resolvedPath"], target.generic_string());
+    EXPECT_EQ(rawInputs[0]["sha256"], topo::dist::sha256File(target));
+    EXPECT_EQ(directInputs[0]["sha256"], topo::dist::sha256File(direct));
+    ASSERT_EQ(r["manual"].size(), 2u);
+    EXPECT_EQ(r["manual"][0]["identity"], "raw-value");
+    EXPECT_EQ(r["manual"][0]["file"], raw.string());
+    EXPECT_EQ(r["manual"][1]["identity"], "direct-value");
+    EXPECT_EQ(r["manual"][1]["file"], direct.string());
+    std::string error;
+    ASSERT_TRUE(verifyAuditSnapshot(r, error)) << error;
+    auto trust = approval(r);
+    applyAuditTrust(r, trust);
+    EXPECT_EQ(r["manualApproval"], "accepted");
+    EXPECT_TRUE(r["passed"].get<bool>());
+
+    // Rewriting the recorded lookup spelling must also invalidate the review.
+    for (auto& input : r["inputs"])
+        if (input["path"] == raw.generic_string()) input["path"] = direct.generic_string();
+    EXPECT_FALSE(verifyAuditSnapshot(r, error));
+    applyAuditTrust(r, trust);
+    EXPECT_EQ(r["manualApproval"], "invalid");
+    EXPECT_FALSE(r["passed"].get<bool>());
+}
+TEST_F(AuditTest, ProviderDigestsRemainBoundToUnfoldedInputPaths) {
+    const auto created = symlinkParentInputs();
+    ASSERT_FALSE(created) << created.message();
+    for (const auto& file : facts.inputs)
+        facts.inputDigests[file] = topo::dist::sha256File(file);
+    auto r = report();
+    EXPECT_TRUE(r["unresolved"].empty()) << r["unresolved"].dump();
+    EXPECT_TRUE(r["passed"].get<bool>());
+    std::string error;
+    EXPECT_TRUE(verifyAuditSnapshot(r, error)) << error;
+
+    const auto raw = facts.inputs.front();
+    facts.inputDigests[raw] = topo::dist::sha256Hex("stale semantic input");
+    auto stale = report();
+    EXPECT_EQ(stale["unresolved"], json::array({"input changed during semantic analysis: " + raw}));
+    EXPECT_FALSE(stale["passed"].get<bool>());
+}
+TEST_F(AuditTest, SymlinkParentInputChangesInvalidateSavedReview) {
+    const auto created = symlinkParentInputs();
+    ASSERT_FALSE(created) << created.message();
+    const auto raw = facts.inputs.front();
+    facts.inputDigests[raw] = topo::dist::sha256File(raw);
+    auto r = report({"app::Log"});
+    std::string error;
+    ASSERT_TRUE(verifyAuditSnapshot(r, error)) << error;
+    auto trust = approval(r);
+    applyAuditTrust(r, trust);
+    ASSERT_TRUE(r["passed"].get<bool>());
+
+    const auto time = fs::last_write_time(raw);
+    std::ofstream(raw) << "changed semantic input\n";
+    fs::last_write_time(raw, time);
+    EXPECT_FALSE(verifyAuditSnapshot(r, error));
+    auto stale = report({"app::Log"});
+    EXPECT_EQ(stale["unresolved"], json::array({"input changed during semantic analysis: " + raw}));
+    applyAuditTrust(stale, trust);
+    EXPECT_FALSE(stale["passed"].get<bool>());
+
+    facts.inputDigests[raw] = topo::dist::sha256File(raw);
+    auto fresh = report({"app::Log"});
+    ASSERT_TRUE(verifyAuditSnapshot(fresh, error)) << error;
+    EXPECT_TRUE(fresh["unresolved"].empty());
+    EXPECT_NE(fresh["reviewKey"], r["reviewKey"]);
+    applyAuditTrust(fresh, trust);
+    EXPECT_EQ(fresh["manualApproval"], "pending");
+    EXPECT_FALSE(fresh["passed"].get<bool>());
+    applyAuditTrust(fresh, approval(fresh));
+    EXPECT_TRUE(fresh["passed"].get<bool>());
+}
 TEST_F(AuditTest, DependencyDirectoryLinksRemainUnresolvedWithoutFollowing) {
     fs::create_directory(root / "dependency");
     fs::create_directory(root / "outside");
     write("outside/Hidden.class", "not an approved dependency input");
     auto created = createAuditSymlink(root / "outside", root / "dependency" / "alias", true);
     ASSERT_FALSE(created) << created.message();
-    facts.dependencies.push_back({"library", (root / "dependency").string(), "1", "", false});
+    facts.dependencies.push_back({"library", (root / "dependency").string(), "1", "", false, "", ""});
     auto r = report();
     EXPECT_FALSE(r["passed"].get<bool>());
     EXPECT_FALSE(r["unresolved"].empty());

@@ -50,7 +50,9 @@ json snapshot(const fs::path& input) {
     }
     if (in.bad() || (!in.eof() && in.fail()))
         throw std::runtime_error("cannot read complete audit input: " + input.string());
-    return {{"path", fs::absolute(input).lexically_normal().generic_string()},
+    // Preserve the lookup spelling: folding ".." after a symlink can select
+    // a different file when verifyAuditSnapshot reopens this input.
+    return {{"path", fs::absolute(input).generic_string()},
             {"resolvedPath", target.generic_string()}, {"size", size}, {"sha256", h.hexDigest()}};
 }
 
@@ -268,9 +270,18 @@ nlohmann::json makeAuditReport(const std::string& project, const AuditFacts& fac
         // requires a separately verified artifact statement.
     }
     if (inputs.size()>100000) throw std::runtime_error("audit exceeds 100000 input files");
-    for (const auto& file : inputs) out["inputs"].push_back(snapshot(fs::path(file).is_absolute() ? fs::path(file) : root / file));
-    for (const auto& [file, expected] : facts.inputDigests)
-        if (snapshot(file).at("sha256") != expected) unresolved("input changed during semantic analysis: " + file);
+    std::map<std::string, std::string> snapshotDigests;
+    for (const auto& file : inputs) {
+        auto input = snapshot(fs::path(file).is_absolute() ? fs::path(file) : root / file);
+        snapshotDigests[input.at("path").get<std::string>()] = input.at("sha256").get<std::string>();
+        out["inputs"].push_back(std::move(input));
+    }
+    for (const auto& [file, expected] : facts.inputDigests) {
+        const auto path = fs::absolute(file).generic_string();
+        const auto found = snapshotDigests.find(path);
+        const auto observed = found == snapshotDigests.end() ? snapshot(file).at("sha256").get<std::string>() : found->second;
+        if (observed != expected) unresolved("input changed during semantic analysis: " + file);
+    }
     out["reviewKey"] = auditReviewKey(out);
     out["manualApproval"] = out["manual"].empty() ? "not-required" : "pending";
     applyAuditTrust(out, json::object());

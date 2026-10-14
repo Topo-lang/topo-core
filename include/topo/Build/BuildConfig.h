@@ -126,6 +126,7 @@ struct BuildConfig {
     bool auditCheck = false;                                  // --audit / [check.audit].enabled
     std::string auditReportPath;
     std::string auditTrustStore;
+    std::vector<std::string> auditAnalysisInputRoots;           // reviewer-granted data roots; CLI only
     std::string auditNativeEvidence;
     std::map<std::string, std::string> auditEvidenceRoots;
     std::optional<bool> checkCliOverride;                      // --check / --no-check: dominates checkMode

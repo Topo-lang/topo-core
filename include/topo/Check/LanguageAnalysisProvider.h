@@ -10,6 +10,7 @@
 #include "topo/Check/SymbolAccessExtractor.h"
 #include "topo/Check/SymbolExtractor.h"
 #include "topo/Sema/SymbolTable.h"
+#include <nlohmann/json.hpp>
 
 #include <memory>
 #include <optional>
@@ -18,11 +19,23 @@
 
 namespace topo::check {
 
+struct AuditExecutionOptions {
+    // Explicit reviewer grants, supplied outside project-controlled models.
+    std::vector<std::string> inputRoots;
+};
+
 /// Abstract factory for language-specific analysis components.
 /// Each topo-lang-* package provides a concrete implementation.
 class LanguageAnalysisProvider {
 public:
     virtual ~LanguageAnalysisProvider() = default;
+
+    /// Require OS confinement before cache lookup or extraction. Unsupported
+    /// providers fail explicitly; ordinary checks retain their normal policy.
+    virtual bool configureAuditExecution(const AuditExecutionOptions&, std::string& diagnostic) {
+        diagnostic = "provider has no isolated audit execution capability";
+        return false;
+    }
 
     /// Supply project context before creating extractors. Paths in a model
     /// are relative to the model file, not the calling process.
@@ -37,6 +50,16 @@ public:
     virtual AuditFacts auditFacts(const std::vector<std::string>& /*sourceFiles*/) const {
         return {};
     }
+
+    /// Optional closed-input cache protocol. Identity must cover negative
+    /// lookups and the executing toolchain, before any expensive extraction.
+    /// Cache payloads contain facts and diagnostics, never policy or approval.
+    virtual nlohmann::json auditCacheIdentity(const std::string& /*projectDir*/,
+                                             const std::string& /*modelPath*/) const {
+        return {{"supported", false}, {"reason", "provider has no closed-input audit cache identity"}};
+    }
+    virtual nlohmann::json exportAuditCache() const { return nullptr; }
+    virtual bool importAuditCache(const nlohmann::json& /*payload*/) { return false; }
     virtual void configureNativeEvidence(const std::string& /*manifest*/,
                                           const std::map<std::string,std::string>& /*roots*/) {}
 
